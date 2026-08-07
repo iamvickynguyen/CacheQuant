@@ -55,3 +55,29 @@ def generate_with_timing(
         per_token_seconds=per_token_seconds,
     )
     return output_ids, timing
+
+
+from transformers import GPT2LMHeadModel, GPT2Tokenizer
+
+DEFAULT_MODEL_NAME = "gpt2"
+
+
+def load_model(model_name: str = DEFAULT_MODEL_NAME) -> tuple[GPT2LMHeadModel, GPT2Tokenizer]:
+    tokenizer = GPT2Tokenizer.from_pretrained(model_name)
+    model = GPT2LMHeadModel.from_pretrained(model_name)
+    model.eval()
+    return model, tokenizer
+
+
+def generate(
+    model: GPT2LMHeadModel,
+    tokenizer: GPT2Tokenizer,
+    prompt: str,
+    max_new_tokens: int = 50,
+) -> tuple[str, GenerationTiming]:
+    input_ids = tokenizer.encode(prompt, return_tensors="pt")
+    output_ids, timing = generate_with_timing(
+        model, input_ids, max_new_tokens, eos_token_id=tokenizer.eos_token_id
+    )
+    text = tokenizer.decode(output_ids[0], skip_special_tokens=True)
+    return text, timing
