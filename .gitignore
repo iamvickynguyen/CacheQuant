@@ -2,3 +2,6 @@
 __pycache__/
 *.pyc
 *.egg-info/
+
+# docs/ is its own local-only git repo (not pushed to this project's remote)
+docs/
