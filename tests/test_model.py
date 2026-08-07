@@ -23,6 +23,7 @@ def test_generate_with_timing_produces_expected_token_count():
 
 def test_generate_with_timing_stops_at_eos():
     model = _tiny_model()
+    model.eval()
     input_ids = torch.randint(0, 50, (1, 5))
 
     with torch.no_grad():
