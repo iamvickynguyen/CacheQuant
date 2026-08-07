@@ -1,6 +1,8 @@
+import pytest
+
 from cachequant.bench.config import BenchConfig
-from cachequant.bench.harness import compute_bench_result
-from cachequant.model import GenerationTiming
+from cachequant.bench.harness import compute_bench_result, run_benchmark
+from cachequant.model import GenerationTiming, load_model
 
 
 def test_compute_bench_result_basic_math():
@@ -37,3 +39,15 @@ def test_compute_bench_result_handles_single_token_generation():
     assert result.decode_tokens_per_sec == 0.0
     assert result.mean_latency_ms == 0.0
     assert result.total_tokens == 1
+
+
+@pytest.mark.integration
+def test_run_benchmark_end_to_end():
+    model, tokenizer = load_model()
+    config = BenchConfig(instance_type="t", dollars_per_hour=1.0, price_source="s", cpu_threads=1)
+
+    result = run_benchmark(model, tokenizer, "Hello there,", config, max_new_tokens=5)
+
+    assert result.total_tokens == 5
+    assert result.prefill_tokens_per_sec > 0
+    assert result.cost_per_1k_tokens >= 0

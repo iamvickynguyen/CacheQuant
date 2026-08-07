@@ -2,7 +2,7 @@ from dataclasses import dataclass
 import statistics
 
 from cachequant.bench.config import BenchConfig
-from cachequant.model import GenerationTiming
+from cachequant.model import GenerationTiming, generate
 
 
 @dataclass
@@ -54,3 +54,14 @@ def compute_bench_result(timing: GenerationTiming, config: BenchConfig) -> Bench
         cost_per_1k_tokens=cost_per_1k_tokens,
         total_tokens=total_tokens,
     )
+
+
+def run_benchmark(
+    model,
+    tokenizer,
+    prompt: str,
+    config: BenchConfig,
+    max_new_tokens: int = 50,
+) -> BenchResult:
+    _, timing = generate(model, tokenizer, prompt, max_new_tokens)
+    return compute_bench_result(timing, config)
