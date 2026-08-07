@@ -24,7 +24,7 @@ def test_compute_bench_result_basic_math():
     assert result.decode_tokens_per_sec == 4.0
     assert result.mean_latency_ms == 250.0
     assert result.p50_latency_ms == 300.0
-    assert result.total_tokens == 5
+    assert result.generated_tokens == 5
     assert result.wall_seconds == 2.0
     # $3.6/hr = $0.001/sec; 2s wall / 5 tokens = 0.4s/token; *1000 tokens = 400s; *$0.001/s = $0.4
     assert round(result.cost_per_1k_tokens, 4) == 0.4
@@ -38,7 +38,7 @@ def test_compute_bench_result_handles_single_token_generation():
 
     assert result.decode_tokens_per_sec == 0.0
     assert result.mean_latency_ms == 0.0
-    assert result.total_tokens == 1
+    assert result.generated_tokens == 1
 
 
 @pytest.mark.integration
@@ -48,6 +48,6 @@ def test_run_benchmark_end_to_end():
 
     result = run_benchmark(model, tokenizer, "Hello there,", config, max_new_tokens=5)
 
-    assert result.total_tokens == 5
+    assert result.generated_tokens == 5
     assert result.prefill_tokens_per_sec > 0
     assert result.cost_per_1k_tokens >= 0

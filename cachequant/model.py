@@ -27,6 +27,7 @@ def generate_with_timing(
 ) -> tuple[torch.Tensor, GenerationTiming]:
     model.eval()
     prefill_tokens = input_ids.shape[1]
+    assert input_ids.shape[0] == 1, "generate_with_timing only supports batch size 1"
 
     with torch.no_grad():
         t0 = time.perf_counter()

@@ -1,6 +1,9 @@
 from dataclasses import dataclass
 import statistics
 
+import torch
+from transformers import GPT2LMHeadModel, GPT2Tokenizer
+
 from cachequant.bench.config import BenchConfig
 from cachequant.model import GenerationTiming, generate
 
@@ -14,15 +17,18 @@ class BenchResult:
     p90_latency_ms: float
     wall_seconds: float
     cost_per_1k_tokens: float
-    total_tokens: int
+    # Count of GENERATED tokens only (excludes prompt/prefill tokens, which
+    # wall_seconds still includes the cost of). cost_per_1k_tokens is
+    # therefore cost per 1K generated tokens with prefill time amortized in
+    # — a common convention, stated explicitly here to avoid misreading.
+    generated_tokens: int
 
 
 def _percentile(values: list[float], pct: float) -> float:
     if not values:
         return 0.0
     ordered = sorted(values)
-    index = min(len(ordered) - 1, int(round(pct / 100 * (len(ordered) - 1))))
-    return ordered[index]
+    return ordered[int(round(pct / 100 * (len(ordered) - 1)))]
 
 
 def compute_bench_result(timing: GenerationTiming, config: BenchConfig) -> BenchResult:
@@ -40,8 +46,11 @@ def compute_bench_result(timing: GenerationTiming, config: BenchConfig) -> Bench
     p90_latency_ms = _percentile(latencies_ms, 90)
 
     wall_seconds = timing.prefill_seconds + decode_seconds
-    total_tokens = timing.total_generated_tokens
-    seconds_per_token = wall_seconds / total_tokens if total_tokens > 0 else 0.0
+    # Generated tokens only — does not include the prompt/prefill tokens,
+    # even though wall_seconds (and thus cost_per_1k_tokens below) does
+    # include prefill time.
+    generated_tokens = timing.total_generated_tokens
+    seconds_per_token = wall_seconds / generated_tokens if generated_tokens > 0 else 0.0
     cost_per_1k_tokens = (config.dollars_per_hour / 3600) * seconds_per_token * 1000
 
     return BenchResult(
@@ -52,16 +61,17 @@ def compute_bench_result(timing: GenerationTiming, config: BenchConfig) -> Bench
         p90_latency_ms=p90_latency_ms,
         wall_seconds=wall_seconds,
         cost_per_1k_tokens=cost_per_1k_tokens,
-        total_tokens=total_tokens,
+        generated_tokens=generated_tokens,
     )
 
 
 def run_benchmark(
-    model,
-    tokenizer,
+    model: GPT2LMHeadModel,
+    tokenizer: GPT2Tokenizer,
     prompt: str,
     config: BenchConfig,
     max_new_tokens: int = 50,
 ) -> BenchResult:
+    torch.set_num_threads(config.cpu_threads)
     _, timing = generate(model, tokenizer, prompt, max_new_tokens)
     return compute_bench_result(timing, config)
