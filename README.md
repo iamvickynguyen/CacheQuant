@@ -17,7 +17,7 @@ pip install -r requirements.txt
 pip install -e .
 ```
 
-Pinned versions: `torch==2.13.0`, `transformers==5.14.1`, `numpy==2.5.1`, `pytest==9.1.1` (see `requirements.txt`).
+Pinned versions: `torch==2.13.0`, `transformers==5.14.1`, `numpy==2.4.6`, `numba==0.66.0`, `pytest==9.1.1` (see `requirements.txt`). `numpy` was downgraded from `2.5.1` in Phase 1 because `numba==0.66.0` requires `numpy<2.5`.
 
 ## Run
 
