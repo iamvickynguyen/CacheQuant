@@ -62,8 +62,9 @@ python scripts/run_bfp_benchmark.py       # fp32 vs BFP speed, writes benchmarks
 ```
 
 See `docs/superpowers/specs/2026-08-07-cachequant-design.md` for the recorded
-quality-delta and speed numbers, and the documented break point (BFP helps
-matrix-matrix prefill more than matrix-vector decode).
+quality-delta and speed numbers, and the documented break point (the unoptimized
+kernel's per-call overhead, not a clean decode-vs-prefill split, dominates the
+measured slowdown).
 
 ### KV-cache prefix reuse
 
