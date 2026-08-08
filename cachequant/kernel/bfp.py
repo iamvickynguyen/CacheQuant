@@ -16,7 +16,7 @@ def quantize_bfp(
 
     max_abs = np.max(np.abs(blocked), axis=-1)
     safe_max_abs = np.maximum(max_abs, 1e-38)
-    exponent = np.where(max_abs > 0, np.floor(np.log2(safe_max_abs)), 0.0).astype(np.int32)
+    exponent = np.where(max_abs > 0, np.ceil(np.log2(safe_max_abs)), 0.0).astype(np.int32)
 
     scale = np.exp2(exponent.astype(np.float64))
     mantissa = np.round(blocked / scale[..., None] * 127.0)

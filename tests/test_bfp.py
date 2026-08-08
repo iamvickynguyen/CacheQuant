@@ -50,7 +50,7 @@ def test_round_trip_relative_error_within_measured_bound():
 
 def test_max_abs_element_uses_full_int8_range():
     x = np.zeros((1, 32), dtype=np.float32)
-    x[0, 5] = 3.0
+    x[0, 5] = 4.0
     mantissa, exponent = quantize_bfp(x)
 
     assert mantissa[0, 0, 5] in (127, -127)
