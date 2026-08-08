@@ -27,3 +27,12 @@ class BFPConv1D(torch.nn.Module):
         out_np = bfp_matmul(x2d, weight_np, self.block_size)
         out = torch.from_numpy(out_np).to(dtype=x.dtype) + self.bias
         return out.view(size_out)
+
+
+def apply_bfp_quantization(model, block_size: int = DEFAULT_BLOCK_SIZE):
+    for block in model.transformer.h:
+        block.attn.c_attn = BFPConv1D(block.attn.c_attn, block_size)
+        block.attn.c_proj = BFPConv1D(block.attn.c_proj, block_size)
+        block.mlp.c_fc = BFPConv1D(block.mlp.c_fc, block_size)
+        block.mlp.c_proj = BFPConv1D(block.mlp.c_proj, block_size)
+    return model
