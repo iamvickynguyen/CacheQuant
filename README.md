@@ -2,9 +2,20 @@
 
 Custom BFP-quantized kernels + KV-cache prefix reuse for faster, cheaper LLM inference. Benchmarked and visualized live.
 
-## What's built so far (Phase 1)
+## What's built so far (Phase 1 + 2)
 
 A clean GPT-2 small (124M) generation loop on CPU, with prefill and decode timed separately, and a benchmark harness that turns those timings into tokens/sec, latency, and cost per 1K generated tokens. This is the frozen baseline every later optimization (quantized kernel, KV-cache reuse) gets compared against. No quantization or caching exists yet — every call runs full fp32 GPT-2 from scratch.
+
+Phase 2 adds a hand-written block floating-point (BFP) quantized matmul kernel
+(`cachequant/kernel/`), applied to GPT-2's attention QKV/output projections and
+both FFN linears (embeddings and `lm_head` stay fp32). Both weights and
+activations are quantized to int8 mantissa + shared per-block exponent (block
+size 32), enabling a genuine int8×int8→int32 matmul, JIT-compiled with Numba.
+Validated against the fp32 reference (unit-tested relative-error bound) before
+any speed benchmarking, with a measured quality delta (perplexity + side-by-side
+generations) and a measured — not assumed — speed comparison against the frozen
+Phase 1 baseline. KV-cache prefix reuse and the combined dashboard are still
+Phase 3/4.
 
 ## Setup
 
@@ -44,7 +55,15 @@ Latest recorded numbers (short prompt, 50 generated tokens; measured on this rep
 
 ### Quantized kernel (BFP)
 
-Not implemented yet — Phase 2.
+```bash
+pytest tests/test_bfp.py tests/test_bfp_numba.py tests/test_bfp_linear.py -v   # validation, no network
+python scripts/compare_bfp_quality.py     # fp32 vs BFP perplexity + generations
+python scripts/run_bfp_benchmark.py       # fp32 vs BFP speed, writes benchmarks/bfp_results*.json
+```
+
+See `docs/superpowers/specs/2026-08-07-cachequant-design.md` for the recorded
+quality-delta and speed numbers, and the documented break point (BFP helps
+matrix-matrix prefill more than matrix-vector decode).
 
 ### KV-cache prefix reuse
 
@@ -54,9 +73,12 @@ Not implemented yet — Phase 3.
 
 Not implemented yet — Phase 4.
 
-## Limitations (Phase 1)
+## Limitations (Phase 1 + 2)
 
 - CPU only, batch size 1 (enforced by an assertion in `generate_with_timing`) — no GPU path, no batching.
+- The BFP kernel is inference-only (no autograd/backward pass) and requires the
+  reduction axis to be evenly divisible by the block size (32) — true for every
+  GPT-2 small linear layer in scope, not asserted for arbitrary shapes.
 - No quantization or caching yet.
 - Benchmark numbers are from one dev machine; re-run `scripts/run_baseline.py` locally before trusting exact figures on different hardware.
 - `max_new_tokens=0` isn't validated — the loop still emits one token in that case.
