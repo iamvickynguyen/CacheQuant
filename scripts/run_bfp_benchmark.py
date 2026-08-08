@@ -7,12 +7,14 @@ import torch
 from cachequant.bench.config import DEFAULT_CONFIG
 from cachequant.bench.harness import run_benchmark
 from cachequant.kernel.bfp_linear import apply_bfp_quantization
-from cachequant.model import load_model
+from cachequant.model import generate, load_model
 
 BENCHMARKS_DIR = Path(__file__).resolve().parent.parent / "benchmarks"
 
 SHORT_PROMPT = "The history of artificial intelligence began with"
 SHORT_MAX_NEW_TOKENS = 50
+
+WARMUP_MAX_NEW_TOKENS = 5
 
 LONG_PROMPT = (
     "Charles Babbage designed the Analytical Engine in the 1830s, a mechanical "
@@ -43,6 +45,13 @@ def main() -> None:
     torch.set_num_threads(DEFAULT_CONFIG.cpu_threads)
     model, tokenizer = load_model()
     apply_bfp_quantization(model)
+
+    # Discard one full warmup generation before any timed run so Numba's
+    # one-time JIT compilation of bfp_matmul (paid on its first call, which
+    # would otherwise land inside the short profile's timed prefill pass)
+    # doesn't contaminate the measured throughput. Mirrors run_baseline.py's
+    # C1 warmup, which guards against an analogous BLAS/thread-pool cost.
+    generate(model, tokenizer, SHORT_PROMPT, WARMUP_MAX_NEW_TOKENS)
 
     BENCHMARKS_DIR.mkdir(parents=True, exist_ok=True)
     _run_profile(
