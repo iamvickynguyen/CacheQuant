@@ -1,3 +1,5 @@
+import copy
+
 import torch
 from transformers import GPT2Config, GPT2LMHeadModel
 from transformers.pytorch_utils import Conv1D
@@ -73,3 +75,21 @@ def test_apply_bfp_quantization_forward_pass_is_finite_and_returns_model():
     assert returned is model
     assert logits.shape == (1, 6, 50)
     assert torch.isfinite(logits).all()
+
+
+def test_apply_bfp_quantization_argmax_predictions_match_fp32_end_to_end():
+    # Per-layer accuracy is tested elsewhere (relative-error bounds above),
+    # but nothing previously checked whether small per-layer errors compound
+    # across a full forward pass into a different predicted token. This runs
+    # the same input through the original fp32 model and a BFP-patched copy
+    # and asserts the argmax token predictions agree.
+    torch.manual_seed(2)
+    fp32_model = _tiny_gpt2()
+    bfp_model = apply_bfp_quantization(copy.deepcopy(fp32_model))
+    input_ids = torch.randint(0, 50, (1, 6))
+
+    with torch.no_grad():
+        fp32_logits = fp32_model(input_ids).logits
+        bfp_logits = bfp_model(input_ids).logits
+
+    assert (fp32_logits.argmax(-1) == bfp_logits.argmax(-1)).all()

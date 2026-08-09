@@ -17,6 +17,11 @@ class BFPConv1D(torch.nn.Module):
         self.block_size = block_size
         self.register_buffer("bias", conv1d.bias.detach().clone())
         weight_t = conv1d.weight.detach().t().contiguous().to(torch.float32)
+        if weight_t.shape[-1] % block_size != 0:
+            raise ValueError(
+                f"BFPConv1D weight reduction axis {weight_t.shape[-1]} is not divisible "
+                f"by block_size {block_size}"
+            )
         self.register_buffer("weight_t", weight_t)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
