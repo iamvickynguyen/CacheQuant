@@ -90,7 +90,8 @@ Not implemented yet — Phase 4.
 - CPU only, batch size 1 (enforced by an assertion in `generate_with_timing`) — no GPU path, no batching.
 - The BFP kernel is inference-only (no autograd/backward pass) and requires the
   reduction axis to be evenly divisible by the block size (32) — true for every
-  GPT-2 small linear layer in scope, not asserted for arbitrary shapes.
+  GPT-2 small linear layer in scope. `BFPConv1D` validates this at construction
+  and raises `ValueError` immediately for a non-divisible reduction axis.
 - No KV-cache reuse yet.
 - Benchmark numbers are from one dev machine; re-run `scripts/run_baseline.py` locally before trusting exact figures on different hardware.
 - `max_new_tokens=0` isn't validated — the loop still emits one token in that case.
