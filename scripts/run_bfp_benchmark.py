@@ -5,6 +5,7 @@ import statistics
 from dataclasses import asdict, fields
 from pathlib import Path
 
+import numba
 import torch
 import transformers
 
@@ -103,7 +104,7 @@ def run_profile(model, tokenizer, prompt: str, max_new_tokens: int, output_path:
         "max_new_tokens": max_new_tokens,
         "n_reps": N_REPS,
         "config": asdict(DEFAULT_CONFIG),
-        "provenance": _provenance(),
+        "provenance": _provenance() | {"numba_threads": numba.get_num_threads()},
         "runs": [asdict(r) for r in results],
         "summary": _summarize(results),
         "reference_generation": reference_text,
@@ -115,6 +116,14 @@ def run_profile(model, tokenizer, prompt: str, max_new_tokens: int, output_path:
 
 
 def main() -> None:
+    # Thread parity with the fp32 baseline. run_benchmark() pins torch to
+    # config.cpu_threads, but the BFP matmul runs under Numba's own thread
+    # pool, which defaults to every logical core on the machine. Without this
+    # the two paths are measured at different thread counts and the comparison
+    # is not apples-to-apples. Numba is BFP-only, so this belongs here rather
+    # than in the shared harness.
+    numba.set_num_threads(DEFAULT_CONFIG.cpu_threads)
+
     model, tokenizer = load_model()
     apply_bfp_quantization(model)
 
