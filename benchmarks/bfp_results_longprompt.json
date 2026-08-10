@@ -14,95 +14,96 @@
     "platform_machine": "x86_64",
     "cpu_count": 12,
     "torch_version": "2.13.0+cu130",
-    "transformers_version": "5.14.1"
+    "transformers_version": "5.14.1",
+    "numba_threads": 8
   },
   "runs": [
     {
-      "prefill_tokens_per_sec": 32.129230864475474,
-      "decode_tokens_per_sec": 1.0822983557571921,
-      "mean_latency_ms": 923.9596407779674,
-      "p50_latency_ms": 927.2799070022302,
-      "p90_latency_ms": 931.1498509996454,
-      "wall_seconds": 16.719199278002634,
-      "cost_per_1k_tokens": 0.16579872617352612,
+      "prefill_tokens_per_sec": 187.97624565067878,
+      "decode_tokens_per_sec": 29.532498869460326,
+      "mean_latency_ms": 33.86100188880745,
+      "p50_latency_ms": 33.882130999700166,
+      "p90_latency_ms": 34.00144499983071,
+      "wall_seconds": 1.7411007169994264,
+      "cost_per_1k_tokens": 0.017265915443577643,
       "generated_tokens": 10
     },
     {
-      "prefill_tokens_per_sec": 32.6627140455042,
-      "decode_tokens_per_sec": 1.0727821211923747,
-      "mean_latency_ms": 932.1557287779191,
-      "p50_latency_ms": 928.6171109997667,
-      "p90_latency_ms": 942.7870350009471,
-      "wall_seconds": 16.655707893001818,
-      "cost_per_1k_tokens": 0.16516910327226803,
+      "prefill_tokens_per_sec": 187.57681361697135,
+      "decode_tokens_per_sec": 36.96101689509122,
+      "mean_latency_ms": 27.055532666711063,
+      "p50_latency_ms": 25.92960199990557,
+      "p90_latency_ms": 28.52465000023585,
+      "wall_seconds": 1.68291010700068,
+      "cost_per_1k_tokens": 0.016688858561090075,
       "generated_tokens": 10
     },
     {
-      "prefill_tokens_per_sec": 32.672778421920746,
-      "decode_tokens_per_sec": 1.074851275624099,
-      "mean_latency_ms": 930.3612719995726,
-      "p50_latency_ms": 930.3978420030035,
-      "p90_latency_ms": 934.7464479978953,
-      "wall_seconds": 16.637011465994874,
-      "cost_per_1k_tokens": 0.16498369703778248,
+      "prefill_tokens_per_sec": 187.99161124890446,
+      "decode_tokens_per_sec": 30.031659475605558,
+      "mean_latency_ms": 33.29819322213249,
+      "p50_latency_ms": 33.06737399998383,
+      "p90_latency_ms": 36.259064999740076,
+      "wall_seconds": 1.735918037999454,
+      "cost_per_1k_tokens": 0.017214520543494583,
       "generated_tokens": 10
     },
     {
-      "prefill_tokens_per_sec": 32.87183826670684,
-      "decode_tokens_per_sec": 1.0753492421511723,
-      "mean_latency_ms": 929.9304456657815,
-      "p50_latency_ms": 933.8538489973871,
-      "p90_latency_ms": 947.1772510005394,
-      "wall_seconds": 16.583091716991476,
-      "cost_per_1k_tokens": 0.16444899286016545,
+      "prefill_tokens_per_sec": 189.6037550475743,
+      "decode_tokens_per_sec": 32.80726016790859,
+      "mean_latency_ms": 30.481058000027083,
+      "p50_latency_ms": 31.751327999700152,
+      "p90_latency_ms": 33.203413000137516,
+      "wall_seconds": 1.6983519520003938,
+      "cost_per_1k_tokens": 0.01684199019067057,
       "generated_tokens": 10
     },
     {
-      "prefill_tokens_per_sec": 32.74433687681086,
-      "decode_tokens_per_sec": 1.0656379115092953,
-      "mean_latency_ms": 938.4050522223536,
-      "p50_latency_ms": 937.8897940005118,
-      "p90_latency_ms": 941.9793710003432,
-      "wall_seconds": 16.691346124003758,
-      "cost_per_1k_tokens": 0.16552251572970392,
+      "prefill_tokens_per_sec": 187.42138427825623,
+      "decode_tokens_per_sec": 28.932731800376217,
+      "mean_latency_ms": 34.562930555592985,
+      "p50_latency_ms": 33.982982999987144,
+      "p90_latency_ms": 35.92055000035543,
+      "wall_seconds": 1.751670396999998,
+      "cost_per_1k_tokens": 0.01737073143691665,
       "generated_tokens": 10
     }
   ],
   "summary": {
     "prefill_tokens_per_sec": {
-      "median": 32.672778421920746,
-      "min": 32.129230864475474,
-      "max": 32.87183826670684
+      "median": 187.97624565067878,
+      "min": 187.42138427825623,
+      "max": 189.6037550475743
     },
     "decode_tokens_per_sec": {
-      "median": 1.074851275624099,
-      "min": 1.0656379115092953,
-      "max": 1.0822983557571921
+      "median": 30.031659475605558,
+      "min": 28.932731800376217,
+      "max": 36.96101689509122
     },
     "mean_latency_ms": {
-      "median": 930.3612719995726,
-      "min": 923.9596407779674,
-      "max": 938.4050522223536
+      "median": 33.29819322213249,
+      "min": 27.055532666711063,
+      "max": 34.562930555592985
     },
     "p50_latency_ms": {
-      "median": 930.3978420030035,
-      "min": 927.2799070022302,
-      "max": 937.8897940005118
+      "median": 33.06737399998383,
+      "min": 25.92960199990557,
+      "max": 33.982982999987144
     },
     "p90_latency_ms": {
-      "median": 941.9793710003432,
-      "min": 931.1498509996454,
-      "max": 947.1772510005394
+      "median": 34.00144499983071,
+      "min": 28.52465000023585,
+      "max": 36.259064999740076
     },
     "wall_seconds": {
-      "median": 16.655707893001818,
-      "min": 16.583091716991476,
-      "max": 16.719199278002634
+      "median": 1.735918037999454,
+      "min": 1.68291010700068,
+      "max": 1.751670396999998
     },
     "cost_per_1k_tokens": {
-      "median": 0.16516910327226803,
-      "min": 0.16444899286016545,
-      "max": 0.16579872617352612
+      "median": 0.017214520543494583,
+      "min": 0.016688858561090075,
+      "max": 0.01737073143691665
     },
     "generated_tokens": {
       "median": 10,

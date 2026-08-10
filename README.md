@@ -17,6 +17,16 @@ generations) and a measured — not assumed — speed comparison against the fro
 Phase 1 baseline. KV-cache prefix reuse and the combined dashboard are still
 Phase 3/4.
 
+The kernel then went through an optimization pass driven by per-stage profiling
+rather than guesswork: weights are quantized once at layer-construction time
+instead of on every forward call, the kernel is `parallel=True` over the
+output-feature axis (which also puts both paths on the same thread count for the
+first time), the per-block scale is hoisted out of the inner loop, and the bias
+is fused into the kernel's output store to avoid a torch op whose OpenMP threads
+were contending with Numba's. That moved the short-prompt profile from ~38x more
+expensive than fp32 to ~1.2x, and reversed the direction of the documented break
+point — see below.
+
 ## Setup
 
 Requires Python 3.14 (the only version this has been run against).
@@ -59,23 +69,41 @@ Latest recorded numbers (short prompt, 50 generated tokens; measured on this rep
 pytest tests/test_bfp.py tests/test_bfp_numba.py tests/test_bfp_linear.py -v   # validation, no network
 python scripts/compare_bfp_quality.py     # fp32 vs BFP perplexity + generations
 python scripts/run_bfp_benchmark.py       # BFP speed, compared against the recorded Phase 1 baseline, writes benchmarks/bfp_results*.json
+python scripts/profile_bfp_breakdown.py   # per-stage timing attribution, writes benchmarks/bfp_breakdown.json
 ```
 
 Latest recorded quality-delta numbers (`gpt2`, fp32 vs BFP-quantized, perplexity
 on `eval/passages.py`):
 
 - fp32 perplexity: ~39.86
-- BFP perplexity: ~39.96 (+0.26%)
+- BFP perplexity: ~40.01 (+0.38%)
 - Greedy generations on both eval prompts were token-identical between fp32 and BFP
 
-Latest recorded speed numbers (median of 5 reps, short prompt / 50 generated
-tokens, vs the Phase 1 baseline above): BFP prefill ~6.3 tokens/sec and decode
-~1.1 tokens/sec, roughly 35-38x more expensive per 1K tokens than fp32
-(~$0.094 vs ~$0.0024). This is a correctness/measurement demonstration, not a
-speed win — see `docs/superpowers/specs/2026-08-07-cachequant-design.md` for
-the full numbers (both prompt profiles) and the documented break point (the
-unoptimized kernel's per-call overhead, not a clean decode-vs-prefill split,
-dominates the measured slowdown).
+Latest recorded speed numbers (median of 5 reps, vs the Phase 1 baseline above),
+after the kernel optimization pass:
+
+| | prefill tok/s | decode tok/s | cost / 1K tokens |
+|---|---:|---:|---:|
+| short prompt, fp32 baseline | 216.2 | 40.8 | $0.00245 |
+| short prompt, BFP | 94.7 (43.8%) | 34.6 (84.9%) | $0.00295 (1.21x) |
+| long prompt, fp32 baseline | 1203.4 | 36.3 | $0.00469 |
+| long prompt, BFP | 188.0 (15.6%) | 30.0 (82.7%) | $0.01721 (3.67x) |
+
+**Documented break point** — and it runs opposite to the design spec's
+prediction. Decode retains 83-85% of fp32 throughput while prefill retains only
+16-44%, because the two phases are limited by different resources: decode (M=1)
+is memory-bandwidth-bound, where reading int8 mantissas instead of fp32 weights
+is roughly a 4x reduction in bytes moved, and that nearly offsets the kernel's
+arithmetic disadvantage. Prefill (M=long) reuses each weight across every token,
+so it is compute-bound, and a readable `@njit` triple loop cannot follow MKL's
+register blocking and AVX kernels. Per-stage profiling backs this up: at prefill
+the int8 kernel is 82-94% of layer time (so the gap is genuine kernel quality),
+while at decode it is only ~50-65%, with activation quantization and per-call
+overhead making up the rest.
+
+See `docs/superpowers/specs/2026-08-07-cachequant-design.md` for both prompt
+profiles in full, the four optimizations and what each was worth, the per-stage
+attribution table, and the pre-optimization numbers kept for comparison.
 
 ### KV-cache prefix reuse
 
@@ -92,6 +120,14 @@ Not implemented yet — Phase 4.
   reduction axis to be evenly divisible by the block size (32) — true for every
   GPT-2 small linear layer in scope. `BFPConv1D` validates this at construction
   and raises `ValueError` immediately for a non-divisible reduction axis.
+- The kernel is still a scalar triple loop — no register blocking, explicit SIMD,
+  or cache tiling. That is what the remaining ~11x prefill gap against BLAS is.
+- `BFPConv1D` quantizes its weight at construction and holds the result as NumPy,
+  so it is CPU-only by design and does not follow `.to(device)`. Consistent with
+  the project's no-GPU-path non-goal, but it is not a general-purpose module.
+- BFP decode throughput is noticeably more sensitive to scheduling noise than the
+  fp32 baseline (31.3-40.0 vs 40.7-40.9 tok/s across 5 reps); N=5 is thin for a
+  spread that wide.
 - No KV-cache reuse yet.
 - Benchmark numbers are from one dev machine; re-run `scripts/run_baseline.py` locally before trusting exact figures on different hardware.
 - `max_new_tokens=0` isn't validated — the loop still emits one token in that case.
