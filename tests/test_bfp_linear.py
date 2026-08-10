@@ -4,6 +4,8 @@ import torch
 from transformers import GPT2Config, GPT2LMHeadModel
 from transformers.pytorch_utils import Conv1D
 
+from cachequant.kernel import bfp_numba
+from cachequant.kernel.bfp import DEFAULT_BLOCK_SIZE
 from cachequant.kernel.bfp_linear import BFPConv1D, apply_bfp_quantization
 
 
@@ -39,6 +41,32 @@ def test_bfp_conv1d_is_a_torch_module_with_no_trainable_params():
 
     assert isinstance(bfp_conv, torch.nn.Module)
     assert list(bfp_conv.parameters()) == []
+
+
+def test_bfp_conv1d_forward_quantizes_only_the_activation_not_the_weight(monkeypatch):
+    # Weights are static between forward passes, so re-quantizing them on every
+    # call is pure waste — and at GPT-2 shapes it is the dominant cost: a decode
+    # step quantizes ~7.1M weight elements per layer to compute a matmul against
+    # a 768-element activation. This pins that the weight is quantized once at
+    # construction and never again.
+    torch.manual_seed(3)
+    conv = Conv1D(nf=64, nx=96)
+    bfp_conv = BFPConv1D(conv)
+
+    quantized_shapes = []
+    real_quantize_bfp = bfp_numba.quantize_bfp
+
+    def counting_quantize_bfp(x, block_size=DEFAULT_BLOCK_SIZE):
+        quantized_shapes.append(tuple(x.shape))
+        return real_quantize_bfp(x, block_size)
+
+    monkeypatch.setattr(bfp_numba, "quantize_bfp", counting_quantize_bfp)
+
+    x = torch.randn(4, 96)
+    with torch.no_grad():
+        bfp_conv(x)
+
+    assert quantized_shapes == [(4, 96)]
 
 
 def _tiny_gpt2() -> GPT2LMHeadModel:

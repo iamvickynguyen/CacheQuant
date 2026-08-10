@@ -1,7 +1,11 @@
 import numpy as np
 
 from cachequant.kernel.bfp import dequantize_bfp, quantize_bfp
-from cachequant.kernel.bfp_numba import bfp_matmul
+from cachequant.kernel.bfp_numba import (
+    bfp_matmul,
+    bfp_matmul_prequantized,
+    prepare_bfp_operand,
+)
 
 
 def test_bfp_matmul_output_shape():
@@ -43,6 +47,51 @@ def test_bfp_matmul_relative_error_within_measured_bound_gpt2_shapes():
 
         rel_err = np.abs(got - ref) / (np.abs(ref) + 1e-3)
         assert rel_err.mean() < 0.10, f"shape {a_shape}x{b_shape}: mean_rel_err={rel_err.mean()}"
+
+
+def test_bfp_matmul_prequantized_matches_bfp_matmul_exactly():
+    # The whole point of the prequantized entry point is that a caller holding
+    # static weights (BFPConv1D) can quantize them once instead of on every
+    # forward call. That is only safe if it is bit-for-bit the same computation
+    # as quantizing inline, so this asserts exact equality, not a tolerance.
+    rng = np.random.default_rng(4)
+    a = rng.standard_normal((7, 128)).astype(np.float32)
+    b = (rng.standard_normal((11, 128)) * 0.02).astype(np.float32)
+
+    b_mantissa, b_scale = prepare_bfp_operand(b)
+
+    assert np.array_equal(bfp_matmul_prequantized(a, b_mantissa, b_scale), bfp_matmul(a, b))
+
+
+def test_bfp_matmul_prequantized_adds_bias_into_the_kernel_output():
+    # Bias is fused into the kernel's output store rather than applied after,
+    # so BFPConv1D.forward never calls a torch elementwise op. That matters for
+    # more than the add itself: torch's OpenMP pool busy-waits after any op it
+    # runs, and those spinning threads then contend with Numba's own pool on
+    # the next kernel call.
+    rng = np.random.default_rng(6)
+    a = rng.standard_normal((5, 64)).astype(np.float32)
+    b = (rng.standard_normal((8, 64)) * 0.02).astype(np.float32)
+    bias = rng.standard_normal(8).astype(np.float32)
+
+    b_mantissa, b_scale = prepare_bfp_operand(b)
+
+    without_bias = bfp_matmul_prequantized(a, b_mantissa, b_scale)
+    with_bias = bfp_matmul_prequantized(a, b_mantissa, b_scale, bias=bias)
+
+    assert np.allclose(with_bias, without_bias + bias, rtol=1e-6, atol=1e-6)
+
+
+def test_bfp_matmul_prequantized_rejects_reduction_axis_mismatch():
+    rng = np.random.default_rng(5)
+    a = rng.standard_normal((3, 64)).astype(np.float32)
+    b_mantissa, b_scale = prepare_bfp_operand(rng.standard_normal((5, 96)).astype(np.float32))
+
+    try:
+        bfp_matmul_prequantized(a, b_mantissa, b_scale)
+        assert False, "expected ValueError"
+    except ValueError:
+        pass
 
 
 def test_bfp_matmul_kernel_dequant_matches_reference_dequant_formula():
