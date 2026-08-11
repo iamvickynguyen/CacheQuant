@@ -164,6 +164,17 @@ Not implemented yet — Phase 4.
   alone exceeds it, the cache temporarily holds more than the configured cap
   rather than raising or truncating (eviction only reclaims *existing*
   entries, and stops once there's nothing left to evict).
+- Enabling the cache costs ~9% on a workload with no prefix reuse (measured
+  0.908x on the no-reuse prompt set): every request still pays the failed
+  lookup, the K/V copy, and an insert nothing later reads. The cache is a bet
+  on the workload — roughly 1.5-2x when a long prefix is shared, a ~9% tax
+  when it isn't.
+- The cache stores K/V as 24 small tensors per token (one per layer per K/V),
+  so resident cost is ~86KB/token — 1.19x the 72KB/token of raw tensor data,
+  or ~172MB at the 2048-token cap. `lookup` also materializes the matched
+  prefix into a fresh contiguous tensor on every request (~20MB, ~8ms for a
+  276-token prefix). Block-granular storage with a block table, rather than
+  per-token nodes, is what production caches use to avoid both costs.
 - No KV-cache + BFP-quantization combined path yet, and no dashboard — both
   are Phase 4.
 - Benchmark numbers are from one dev machine; re-run `scripts/run_baseline.py` locally before trusting exact figures on different hardware.
