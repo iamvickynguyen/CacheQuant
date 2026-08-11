@@ -76,3 +76,24 @@ def test_cache_hit_produces_identical_text_to_full_recompute(model_and_tokenizer
     baseline_text, _ = generate(model, tokenizer, prompt2, MAX_NEW_TOKENS)
 
     assert cached_text == baseline_text
+
+
+@pytest.mark.integration
+def test_eviction_under_pressure_still_produces_correct_output(model_and_tokenizer):
+    model, tokenizer = model_and_tokenizer
+    # A tiny cap forces prompt_a's cached tokens to be evicted once prompt_b
+    # (a disjoint prompt) is inserted, since together they exceed the cap.
+    cache = PrefixKVCache(max_tokens=6)
+    prompt_a = "Artificial intelligence began with"
+    prompt_b = "The recipe calls for two cups of flour and sugar mixed"
+
+    generate_with_prefix_cache(model, tokenizer, prompt_a, cache, MAX_NEW_TOKENS)
+    generate_with_prefix_cache(model, tokenizer, prompt_b, cache, MAX_NEW_TOKENS)
+
+    # Re-requesting prompt_a: whatever wasn't evicted is reused correctly,
+    # and whatever was evicted is recomputed correctly - either way the
+    # final text must still match a full from-scratch recompute exactly.
+    cached_text, _, _ = generate_with_prefix_cache(model, tokenizer, prompt_a, cache, MAX_NEW_TOKENS)
+    baseline_text, _ = generate(model, tokenizer, prompt_a, MAX_NEW_TOKENS)
+
+    assert cached_text == baseline_text
