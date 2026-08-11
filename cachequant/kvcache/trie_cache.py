@@ -49,6 +49,13 @@ class PrefixKVCache:
             node = child
             match_len += 1
 
+        if start_index > match_len:
+            raise ValueError(
+                f"start_index={start_index} exceeds the cached prefix length {match_len} "
+                "found for these token_ids; callers must pass start_index <= that length "
+                "(e.g. the matched_len returned by a prior lookup() on this same cache)."
+            )
+
         new_token_count = len(token_ids) - match_len
         if new_token_count > 0:
             self.evict_to_fit(new_token_count, protected=protected_nodes)

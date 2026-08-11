@@ -1,15 +1,11 @@
 import json
-import os
-import platform
 import statistics
 from dataclasses import asdict, fields
 from pathlib import Path
 
-import torch
-import transformers
-
 from cachequant.bench.config import DEFAULT_CONFIG
 from cachequant.bench.harness import BenchResult, run_benchmark
+from cachequant.bench.provenance import provenance
 from cachequant.model import generate, load_model
 
 PROMPT = "The history of artificial intelligence began with"
@@ -47,35 +43,6 @@ SHORT_OUTPUT_PATH = BENCHMARKS_DIR / "baseline_results.json"
 LONG_OUTPUT_PATH = BENCHMARKS_DIR / "baseline_results_longprompt.json"
 
 
-def _cpu_model_name() -> str:
-    """Best-effort human-readable CPU model name.
-
-    platform.processor() is frequently an empty string on Linux (it relies
-    on info the OS doesn't always populate), so this falls back to parsing
-    /proc/cpuinfo, and finally to platform.machine(), so the provenance
-    disclosure always names *something* concrete.
-    """
-    try:
-        with open("/proc/cpuinfo") as f:
-            for line in f:
-                if line.lower().startswith("model name"):
-                    return line.split(":", 1)[1].strip()
-    except OSError:
-        pass
-    return platform.processor() or platform.machine() or "unknown"
-
-
-def _provenance() -> dict:
-    return {
-        "platform_processor": platform.processor(),
-        "cpu_model": _cpu_model_name(),
-        "platform_machine": platform.machine(),
-        "cpu_count": os.cpu_count(),
-        "torch_version": torch.__version__,
-        "transformers_version": transformers.__version__,
-    }
-
-
 def _summarize(results: list[BenchResult]) -> dict:
     """Median/min/max per BenchResult field across repeated runs."""
     summary = {}
@@ -102,7 +69,7 @@ def run_profile(model, tokenizer, prompt: str, max_new_tokens: int, output_path:
         "max_new_tokens": max_new_tokens,
         "n_reps": N_REPS,
         "config": asdict(DEFAULT_CONFIG),
-        "provenance": _provenance(),
+        "provenance": provenance(),
         "runs": [asdict(r) for r in results],
         "summary": _summarize(results),
         "reference_generation": reference_text,

@@ -1,3 +1,4 @@
+import pytest
 import torch
 
 from cachequant.kvcache.trie_cache import PrefixKVCache
@@ -144,6 +145,33 @@ def test_evicted_prefix_is_fully_gone_and_recomputed_not_silently_wrong():
     # seq_b, the reason for eviction, is fully present.
     matched_b, _ = cache.lookup(seq_b)
     assert matched_b == 3
+
+
+def test_insert_with_start_index_exceeding_match_len_raises_on_empty_cache():
+    """start_index must never exceed the actual matched prefix length: a
+    caller passing a stale/wrong start_index would otherwise silently read
+    keys[l][negative_index] and corrupt the cache with wrong tensor data."""
+    cache = PrefixKVCache(max_tokens=100)
+    token_ids = [1, 2, 3]
+    keys, values = _kv_for([3])
+
+    with pytest.raises(ValueError):
+        cache.insert(token_ids, keys, values, start_index=1)
+
+
+def test_insert_with_start_index_exceeding_match_len_raises_on_partial_cache():
+    cache = PrefixKVCache(max_tokens=100)
+    prefix_ids = [1, 2]
+    prefix_keys, prefix_values = _kv_for(prefix_ids)
+    cache.insert(prefix_ids, prefix_keys, prefix_values)
+
+    full_ids = [1, 2, 3, 4, 5]
+    suffix_keys, suffix_values = _kv_for([4, 5])
+
+    # Actual match_len for full_ids against this cache is 2, but start_index
+    # claims 3 tokens are already cached — must raise, not silently corrupt.
+    with pytest.raises(ValueError):
+        cache.insert(full_ids, suffix_keys, suffix_values, start_index=3)
 
 
 def test_eviction_proceeds_leaf_inward_lru_first():

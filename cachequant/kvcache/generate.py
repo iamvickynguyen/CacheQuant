@@ -46,7 +46,7 @@ def generate_with_prefix_cache(
 
     # Never serve the final prompt token from cache: next-token logits
     # require a fresh forward pass at that position, not just its cached K/V.
-    matched_len, past_cache = cache.lookup(token_ids[:-1]) if prompt_len > 1 else (0, None)
+    matched_len, past_cache = cache.lookup(token_ids[:-1])
     suffix_ids = token_ids[matched_len:]
     suffix_tensor = torch.tensor([suffix_ids], dtype=torch.long)
 
@@ -84,8 +84,7 @@ def generate_with_prefix_cache(
         recomputed_prefill_tokens=len(suffix_ids),
     )
 
-    if len(suffix_ids) > 0:
-        new_keys, new_values = _extract_layer_slices(full_cache, matched_len, prompt_len)
-        cache.insert(token_ids, new_keys, new_values, start_index=matched_len)
+    new_keys, new_values = _extract_layer_slices(full_cache, matched_len, prompt_len)
+    cache.insert(token_ids, new_keys, new_values, start_index=matched_len)
 
     return text, timing, stats

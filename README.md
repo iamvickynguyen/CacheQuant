@@ -123,8 +123,8 @@ attribution table, and the pre-optimization numbers kept for comparison.
 ### KV-cache prefix reuse
 
 ```bash
-pytest tests/test_trie_cache.py tests/test_kvcache_generate.py -v -m "not integration"  # trie unit tests, no network
-pytest tests/test_kvcache_generate.py -v -m integration                                  # correctness tests against real GPT-2
+pytest tests/test_trie_cache.py -v                        # trie unit tests, no network
+pytest tests/test_kvcache_generate.py -v -m integration    # correctness tests against real GPT-2
 python scripts/run_kvcache_benchmark.py    # hit rate vs. prefill speedup, writes benchmarks/kvcache_results.json
 ```
 
