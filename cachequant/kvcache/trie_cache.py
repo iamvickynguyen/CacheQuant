@@ -37,18 +37,23 @@ class PrefixKVCache:
             return
         num_layers = len(keys)
 
+        # First pass: walk existing trie and collect matched nodes (protect them from eviction).
         node = self._root
         match_len = 0
+        protected_nodes = set()
         for token_id in token_ids:
             child = node.children.get(token_id)
             if child is None:
                 break
+            protected_nodes.add(child)
             node = child
             match_len += 1
+
         new_token_count = len(token_ids) - match_len
         if new_token_count > 0:
-            self.evict_to_fit(new_token_count)
+            self.evict_to_fit(new_token_count, protected=protected_nodes)
 
+        # Second pass: insert or traverse the trie, creating new nodes as needed.
         node = self._root
         for i, token_id in enumerate(token_ids):
             child = node.children.get(token_id)
@@ -107,22 +112,26 @@ class PrefixKVCache:
 
         return matched_len, cache
 
-    def evict_to_fit(self, additional_tokens: int) -> None:
+    def evict_to_fit(self, additional_tokens: int, protected: set["_TrieNode"] | None = None) -> None:
+        if protected is None:
+            protected = set()
         while self.num_tokens + additional_tokens > self.max_tokens:
-            leaf = self._lru_leaf()
+            leaf = self._lru_leaf(protected=protected)
             if leaf is None:
                 break
             del leaf.parent.children[leaf.token_id]
             self.num_tokens -= 1
 
-    def _lru_leaf(self) -> "_TrieNode | None":
+    def _lru_leaf(self, protected: set["_TrieNode"] | None = None) -> "_TrieNode | None":
+        if protected is None:
+            protected = set()
         leaves = []
         stack = [self._root]
         while stack:
             node = stack.pop()
             if node.children:
                 stack.extend(node.children.values())
-            elif node is not self._root:
+            elif node is not self._root and node not in protected:
                 leaves.append(node)
         if not leaves:
             return None

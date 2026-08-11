@@ -77,3 +77,48 @@ def test_insert_is_idempotent_for_already_cached_prefix():
     cache.insert(token_ids, keys, values)
 
     assert cache.num_tokens == 3
+
+
+def test_matched_prefix_protected_from_eviction_during_large_insert():
+    """Regression test: ensure matched prefix nodes are not evicted during insert.
+
+    This tests the fix for a bug where if a single insert's new_token_count was large
+    enough to trigger eviction of the matched prefix, the second pass would try to
+    recreate those nodes using negative indexing into the suffix KV tensors, silently
+    corrupting the cache with wrong tensor data.
+
+    Setup: small cache (max_tokens=3), insert a prefix, then insert a full sequence
+    with start_index equal to the prefix length but with a large enough suffix that
+    eviction would normally need to consume the matched prefix to fit.
+
+    Expected: matched prefix is protected and not evicted; lookup returns correct KV.
+    """
+    cache = PrefixKVCache(max_tokens=3)
+
+    # Insert prefix [1, 2]
+    prefix_ids = [1, 2]
+    prefix_keys, prefix_values = _kv_for(prefix_ids)
+    cache.insert(prefix_ids, prefix_keys, prefix_values)
+    assert cache.num_tokens == 2
+
+    # Verify prefix is cached
+    matched_len, _ = cache.lookup(prefix_ids)
+    assert matched_len == 2
+
+    # Insert full sequence [1, 2, 3, 4, 5] with start_index=2.
+    # The suffix [3, 4, 5] requires 3 new tokens, which alone exceeds max_tokens=3.
+    # Eviction must not touch the protected matched prefix [1, 2].
+    full_ids = [1, 2, 3, 4, 5]
+    suffix_kv_ids = [3, 4, 5]
+    suffix_keys, suffix_values = _kv_for(suffix_kv_ids)
+    cache.insert(full_ids, suffix_keys, suffix_values, start_index=2)
+
+    # Lookup the full sequence and verify all KV is correct.
+    matched_len, dyn_cache = cache.lookup(full_ids)
+    assert matched_len == 5
+    assert dyn_cache.get_seq_length() == 5
+
+    # Verify the KV for position 0 (token 1) equals what we originally inserted.
+    # This catches the bug: if node for token 1 got recreated during eviction,
+    # it would have read keys[l][-2], corrupting the cached value.
+    assert torch.equal(dyn_cache.layers[0].keys[0, :, 0, :], prefix_keys[0][0])
