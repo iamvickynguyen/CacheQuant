@@ -122,3 +122,52 @@ def test_matched_prefix_protected_from_eviction_during_large_insert():
     # This catches the bug: if node for token 1 got recreated during eviction,
     # it would have read keys[l][-2], corrupting the cached value.
     assert torch.equal(dyn_cache.layers[0].keys[0, :, 0, :], prefix_keys[0][0])
+
+
+def test_evicted_prefix_is_fully_gone_and_recomputed_not_silently_wrong():
+    cache = PrefixKVCache(max_tokens=3)
+    seq_a = [1, 2, 3]
+    keys_a, values_a = _kv_for(seq_a)
+    cache.insert(seq_a, keys_a, values_a)
+    assert cache.num_tokens == 3
+
+    seq_b = [4, 5, 6]
+    keys_b, values_b = _kv_for(seq_b)
+    cache.insert(seq_b, keys_b, values_b)
+
+    # seq_a was evicted entirely to make room for seq_b under the 3-token cap.
+    assert cache.num_tokens == 3
+    matched_len, dyn_cache = cache.lookup(seq_a)
+    assert matched_len == 0
+    assert dyn_cache is None
+
+    # seq_b, the reason for eviction, is fully present.
+    matched_b, _ = cache.lookup(seq_b)
+    assert matched_b == 3
+
+
+def test_eviction_proceeds_leaf_inward_lru_first():
+    cache = PrefixKVCache(max_tokens=5)
+    seq_a = [1, 2, 3]  # inserted first -> oldest
+    seq_b = [10, 20]  # inserted second -> newer
+    keys_a, values_a = _kv_for(seq_a)
+    keys_b, values_b = _kv_for(seq_b)
+    cache.insert(seq_a, keys_a, values_a)
+    cache.insert(seq_b, keys_b, values_b)
+    assert cache.num_tokens == 5
+
+    seq_c = [30, 40]
+    keys_c, values_c = _kv_for(seq_c)
+    cache.insert(seq_c, keys_c, values_c)
+
+    # Cap stays at 5: the 2 oldest leaf-inward tokens of seq_a (its tail, "3"
+    # then "2") are evicted to make room, leaving seq_a's first token ("1")
+    # cached alone, seq_b fully intact (never touched since seq_a is older),
+    # and seq_c fully inserted.
+    assert cache.num_tokens == 5
+    matched_a, _ = cache.lookup(seq_a)
+    matched_b, _ = cache.lookup(seq_b)
+    matched_c, _ = cache.lookup(seq_c)
+    assert matched_a == 1
+    assert matched_b == 2
+    assert matched_c == 2
