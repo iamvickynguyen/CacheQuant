@@ -10,6 +10,8 @@ from cachequant.model import generate, load_model
 
 BENCHMARKS_DIR = Path(__file__).resolve().parent.parent / "benchmarks"
 MAX_NEW_TOKENS = 10
+WARMUP_PROMPT = "The quick brown fox jumps over the lazy dog."
+WARMUP_MAX_NEW_TOKENS = 5
 
 PREAMBLE = "You are a helpful assistant. Answer concisely and factually. User question: "
 HIGH_REUSE_SUFFIXES = [
@@ -75,6 +77,12 @@ def _run_prompt_set(model, tokenizer, prompts: list[str], label: str) -> dict:
 def main() -> None:
     torch.set_num_threads(DEFAULT_CONFIG.cpu_threads)
     model, tokenizer = load_model()
+
+    # C1 (mirrors scripts/run_baseline.py): discard one full warmup generation
+    # before any timed run so the first forward pass's one-time thread-pool
+    # spin-up / lazy kernel selection cost doesn't contaminate the first
+    # measured row's prefill timing.
+    generate(model, tokenizer, WARMUP_PROMPT, WARMUP_MAX_NEW_TOKENS)
 
     high_reuse = _run_prompt_set(model, tokenizer, HIGH_REUSE_PROMPTS, "high_reuse")
     no_reuse = _run_prompt_set(model, tokenizer, NO_REUSE_PROMPTS, "no_reuse")
