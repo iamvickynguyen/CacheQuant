@@ -1,0 +1,116 @@
+{
+  "high_reuse": {
+    "label": "high_reuse",
+    "rows": [
+      {
+        "prompt": "You are a helpful assistant. Answer concisely and factually. User question: What is the capital of France?",
+        "prompt_tokens": 23,
+        "cached_tokens": 0,
+        "hit_rate": 0.0,
+        "recomputed_prefill_tokens": 23,
+        "baseline_prefill_seconds": 0.1645976959998734,
+        "cached_prefill_seconds": 0.03586450100010552,
+        "prefill_speedup": 4.589432207613571
+      },
+      {
+        "prompt": "You are a helpful assistant. Answer concisely and factually. User question: What is the boiling point of water in Celsius?",
+        "prompt_tokens": 26,
+        "cached_tokens": 19,
+        "hit_rate": 0.7307692307692307,
+        "recomputed_prefill_tokens": 7,
+        "baseline_prefill_seconds": 0.03768444900015311,
+        "cached_prefill_seconds": 0.03285611699993751,
+        "prefill_speedup": 1.146953822943374
+      },
+      {
+        "prompt": "You are a helpful assistant. Answer concisely and factually. User question: Who wrote the play Hamlet?",
+        "prompt_tokens": 23,
+        "cached_tokens": 16,
+        "hit_rate": 0.6956521739130435,
+        "recomputed_prefill_tokens": 7,
+        "baseline_prefill_seconds": 0.03613727699939773,
+        "cached_prefill_seconds": 0.03619388299921411,
+        "prefill_speedup": 0.9984360340719007
+      },
+      {
+        "prompt": "You are a helpful assistant. Answer concisely and factually. User question: What is the largest planet in the solar system?",
+        "prompt_tokens": 26,
+        "cached_tokens": 19,
+        "hit_rate": 0.7307692307692307,
+        "recomputed_prefill_tokens": 7,
+        "baseline_prefill_seconds": 0.03754432200003066,
+        "cached_prefill_seconds": 0.03282395499991253,
+        "prefill_speedup": 1.1438085995466027
+      },
+      {
+        "prompt": "You are a helpful assistant. Answer concisely and factually. User question: How many continents are there on Earth?",
+        "prompt_tokens": 24,
+        "cached_tokens": 16,
+        "hit_rate": 0.6666666666666666,
+        "recomputed_prefill_tokens": 8,
+        "baseline_prefill_seconds": 0.03660636299991893,
+        "cached_prefill_seconds": 0.03316270899995288,
+        "prefill_speedup": 1.1038411548336096
+      }
+    ],
+    "avg_hit_rate": 0.5647714604236344,
+    "avg_prefill_speedup": 1.7964943638018116
+  },
+  "no_reuse": {
+    "label": "no_reuse",
+    "rows": [
+      {
+        "prompt": "The stock market fell sharply today after",
+        "prompt_tokens": 7,
+        "cached_tokens": 0,
+        "hit_rate": 0.0,
+        "recomputed_prefill_tokens": 7,
+        "baseline_prefill_seconds": 0.03242478799984383,
+        "cached_prefill_seconds": 0.032354226000279596,
+        "prefill_speedup": 1.0021809206489323
+      },
+      {
+        "prompt": "In a small village nestled between two mountains,",
+        "prompt_tokens": 10,
+        "cached_tokens": 0,
+        "hit_rate": 0.0,
+        "recomputed_prefill_tokens": 10,
+        "baseline_prefill_seconds": 0.03531016099987028,
+        "cached_prefill_seconds": 0.03346056700047484,
+        "prefill_speedup": 1.0552768277766837
+      },
+      {
+        "prompt": "def calculate_average(numbers):",
+        "prompt_tokens": 8,
+        "cached_tokens": 0,
+        "hit_rate": 0.0,
+        "recomputed_prefill_tokens": 8,
+        "baseline_prefill_seconds": 0.03303631700055121,
+        "cached_prefill_seconds": 0.03292862799935392,
+        "prefill_speedup": 1.0032703761966457
+      },
+      {
+        "prompt": "Scientists have discovered a new species of",
+        "prompt_tokens": 7,
+        "cached_tokens": 0,
+        "hit_rate": 0.0,
+        "recomputed_prefill_tokens": 7,
+        "baseline_prefill_seconds": 0.03288687799977197,
+        "cached_prefill_seconds": 0.032297244000801584,
+        "prefill_speedup": 1.0182564803038845
+      },
+      {
+        "prompt": "The recipe calls for two cups of flour and",
+        "prompt_tokens": 9,
+        "cached_tokens": 1,
+        "hit_rate": 0.1111111111111111,
+        "recomputed_prefill_tokens": 8,
+        "baseline_prefill_seconds": 0.0332131360000858,
+        "cached_prefill_seconds": 0.03298651300065103,
+        "prefill_speedup": 1.0068701714373476
+      }
+    ],
+    "avg_hit_rate": 0.02222222222222222,
+    "avg_prefill_speedup": 1.0171709552726989
+  }
+}
