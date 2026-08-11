@@ -2,7 +2,7 @@
 
 Custom BFP-quantized kernels + KV-cache prefix reuse for faster, cheaper LLM inference. Benchmarked and visualized live.
 
-## What's built so far (Phase 1 + 2)
+## What's built so far (Phase 1 + 2 + 3)
 
 A clean GPT-2 small (124M) generation loop on CPU, with prefill and decode timed separately, and a benchmark harness that turns those timings into tokens/sec, latency, and cost per 1K generated tokens. This is the frozen baseline every later optimization (quantized kernel, KV-cache reuse) gets compared against. Phase 1 has no quantization or caching — every call ran full fp32 GPT-2 from scratch.
 
@@ -26,6 +26,21 @@ is fused into the kernel's output store to avoid a torch op whose OpenMP threads
 were contending with Numba's. That moved the short-prompt profile from ~38x more
 expensive than fp32 to ~1.2x, and reversed the direction of the documented break
 point — see below.
+
+Phase 3 adds cross-request KV-cache prefix reuse (`cachequant/kvcache/`): a
+token-level trie (`PrefixKVCache`) where each node is one token position
+holding that position's per-layer K/V tensors, with LRU eviction capped by
+`BenchConfig.max_cache_tokens`. `generate_with_prefix_cache` looks up the
+longest cached prefix of an incoming prompt (capped at `prompt_len - 1`, since
+predicting the next token always needs one fresh forward pass at the last
+prompt position), reuses cached K/V for the matched prefix, recomputes only
+the uncached suffix, and inserts the newly computed K/V back into the cache
+for future requests. Validated for exact-prefix hits, partial-prefix hits,
+cold misses, eviction under cache-size pressure, and hit-vs-recompute output
+equivalence, with a measured hit-rate-vs-speedup benchmark comparing a
+high-reuse prompt set (shared preamble) against a no-reuse prompt set
+(independent prompts). The combined dashboard toggling quantization and
+caching together is still Phase 4.
 
 ## Setup
 
@@ -107,13 +122,22 @@ attribution table, and the pre-optimization numbers kept for comparison.
 
 ### KV-cache prefix reuse
 
-Not implemented yet — Phase 3.
+```bash
+pytest tests/test_trie_cache.py tests/test_kvcache_generate.py -v -m "not integration"  # trie unit tests, no network
+pytest tests/test_kvcache_generate.py -v -m integration                                  # correctness tests against real GPT-2
+python scripts/run_kvcache_benchmark.py    # hit rate vs. prefill speedup, writes benchmarks/kvcache_results.json
+```
+
+See `docs/superpowers/specs/2026-08-07-cachequant-design.md` for the recorded
+hit-rate/speedup numbers and the documented break points (prefix caching only
+helps prefill, never decode; the final prompt token is always freshly
+computed, capping max hit rate at `(N-1)/N` for an N-token prompt).
 
 ### Dashboard
 
 Not implemented yet — Phase 4.
 
-## Limitations (Phase 1 + 2)
+## Limitations (Phase 1 + 2 + 3)
 
 - CPU only, batch size 1 (enforced by an assertion in `generate_with_timing`) — no GPU path, no batching.
 - The BFP kernel is inference-only (no autograd/backward pass) and requires the
@@ -128,7 +152,20 @@ Not implemented yet — Phase 4.
 - BFP decode throughput is noticeably more sensitive to scheduling noise than the
   fp32 baseline (31.3-40.0 vs 40.7-40.9 tok/s across 5 reps); N=5 is thin for a
   spread that wide.
-- No KV-cache reuse yet.
+- The prefix cache's eviction scan (`PrefixKVCache._lru_leaf`) walks the
+  entire trie on every evicted node — an O(n) scan acceptable at this
+  project's demo scale (a few thousand cached tokens), not built for a large
+  production cache.
+- The cache never serves the final prompt token from a lookup — next-token
+  logits require a fresh forward pass at that position — so an exactly
+  repeated N-token prompt has a maximum possible hit rate of `(N-1)/N`, not
+  1.0.
+- `max_cache_tokens` is a soft cap: if a single prompt's uncached token count
+  alone exceeds it, the cache temporarily holds more than the configured cap
+  rather than raising or truncating (eviction only reclaims *existing*
+  entries, and stops once there's nothing left to evict).
+- No KV-cache + BFP-quantization combined path yet, and no dashboard — both
+  are Phase 4.
 - Benchmark numbers are from one dev machine; re-run `scripts/run_baseline.py` locally before trusting exact figures on different hardware.
 - `max_new_tokens=0` isn't validated — the loop still emits one token in that case.
 - Only tested against Python 3.14.
