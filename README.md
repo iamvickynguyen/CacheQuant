@@ -2,7 +2,7 @@
 
 Custom BFP-quantized kernels + KV-cache prefix reuse for faster, cheaper LLM inference. Benchmarked and visualized live.
 
-## What's built so far (Phase 1 + 2 + 3)
+## What's built so far (Phase 1 + 2 + 3 + 4a)
 
 A clean GPT-2 small (124M) generation loop on CPU, with prefill and decode timed separately, and a benchmark harness that turns those timings into tokens/sec, latency, and cost per 1K generated tokens. This is the frozen baseline every later optimization (quantized kernel, KV-cache reuse) gets compared against. Phase 1 has no quantization or caching — every call ran full fp32 GPT-2 from scratch.
 
@@ -14,8 +14,8 @@ size 32), enabling a genuine int8×int8→int32 matmul, JIT-compiled with Numba.
 Validated against the fp32 reference (unit-tested relative-error bound) before
 any speed benchmarking, with a measured quality delta (perplexity + side-by-side
 generations) and a measured — not assumed — speed comparison against the frozen
-Phase 1 baseline. KV-cache prefix reuse and the combined dashboard are still
-Phase 3/4.
+Phase 1 baseline. KV-cache prefix reuse is Phase 3, and the combined
+BFP + KV-cache pipeline is Phase 4a.
 
 The kernel then went through an optimization pass driven by per-stage profiling
 rather than guesswork: weights are quantized once at layer-construction time
@@ -39,8 +39,8 @@ for future requests. Validated for exact-prefix hits, partial-prefix hits,
 cold misses, eviction under cache-size pressure, and hit-vs-recompute output
 equivalence, with a measured hit-rate-vs-speedup benchmark comparing a
 high-reuse prompt set (shared preamble) against a no-reuse prompt set
-(independent prompts). The combined dashboard toggling quantization and
-caching together is still Phase 4.
+(independent prompts). The combined pipeline toggling quantization and
+caching together is Phase 4a — see below.
 
 ## Setup
 
@@ -133,9 +133,36 @@ hit-rate/speedup numbers and the documented break points (prefix caching only
 helps prefill, never decode; the final prompt token is always freshly
 computed, capping max hit rate at `(N-1)/N` for an N-token prompt).
 
+### Combined pipeline
+
+```bash
+pytest tests/test_pipeline.py -v -m integration   # BFP+cache equivalence, 4-combo smoke test
+python scripts/run_combined_benchmark.py           # all 4 toggle states x 3 prompt sets, writes benchmarks/combined_results.json
+```
+
+`cachequant/pipeline.py` adds a single `generate(model, tokenizer, prompt,
+cache=None, max_new_tokens=50)` entry point covering all four BFP x
+prefix-cache toggle states: BFP is selected by whether `model` was passed
+through `apply_bfp_quantization`, caching by whether a `PrefixKVCache` is
+passed as `cache`. No new generation logic — the two Phase 2/3 paths were
+already orthogonal (BFP only replaces `Conv1D` linears; the cache never
+inspects which Conv1D produced its K/V tensors), so this is a thin dispatcher
+plus a correctness test for the one previously-untested combination (BFP
+model + cache hit together) and a benchmark across all four states.
+
+Latest recorded numbers (median of 5 reps, `total_prefill_seconds` summed
+across each 5-prompt set) show caching does not rescue BFP's prefill
+slowdown: `bfp_cache` never beats `fp32_cache`, losing by 2.65x on
+`high_reuse` (0.443s vs 0.167s), 4.36x on `long_high_reuse` (1.588s vs
+0.364s), and 2.18x on `no_reuse` (0.356s vs 0.163s), even though hit rates
+are identical between the two (0.565 / 0.777 / 0.022) — confirming cache
+behavior is quantization-independent. `fp32_cache` is the fastest combination
+in every measured scenario; BFP's kernel-quality gap (documented above) is
+larger than what a cache hit can claw back.
+
 ### Dashboard
 
-Not implemented yet — Phase 4.
+Not implemented yet — Phase 4b.
 
 ## Limitations (Phase 1 + 2 + 3)
 
@@ -175,8 +202,7 @@ Not implemented yet — Phase 4.
   prefix into a fresh contiguous tensor on every request (~20MB, ~8ms for a
   276-token prefix). Block-granular storage with a block table, rather than
   per-token nodes, is what production caches use to avoid both costs.
-- No KV-cache + BFP-quantization combined path yet, and no dashboard — both
-  are Phase 4.
+- No dashboard yet — Phase 4b.
 - Benchmark numbers are from one dev machine; re-run `scripts/run_baseline.py` locally before trusting exact figures on different hardware.
 - `max_new_tokens=0` isn't validated — the loop still emits one token in that case.
 - Only tested against Python 3.14.
