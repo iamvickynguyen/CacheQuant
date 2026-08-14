@@ -150,21 +150,29 @@ inspects which Conv1D produced its K/V tensors), so this is a thin dispatcher
 plus a correctness test for the one previously-untested combination (BFP
 model + cache hit together) and a benchmark across all four states.
 
-Latest recorded numbers (median of 5 reps, `total_prefill_seconds` summed
-across each 5-prompt set) show caching does not rescue BFP's prefill
-slowdown: `bfp_cache` never beats `fp32_cache`, losing by 2.65x on
-`high_reuse` (0.443s vs 0.167s), 4.36x on `long_high_reuse` (1.588s vs
-0.364s), and 2.18x on `no_reuse` (0.356s vs 0.163s), even though hit rates
-are identical between the two (0.565 / 0.777 / 0.022) — confirming cache
-behavior is quantization-independent. `fp32_cache` is the fastest combination
-in every measured scenario; BFP's kernel-quality gap (documented above) is
-larger than what a cache hit can claw back.
+Latest recorded numbers (median of 5 reps, `total_honest_prefill_seconds`
+summed across each 5-prompt set — includes `cache.lookup()`/`cache.insert()`
+overhead for the cache-on combos, not just the internal forward-pass timing;
+see Limitations below) show caching does not rescue BFP's prefill slowdown:
+`bfp_cache` never beats `fp32_cache`, losing by 2.44x on `high_reuse` (0.472s
+vs 0.194s), 3.84x on `long_high_reuse` (1.696s vs 0.442s), and 2.07x on
+`no_reuse` (0.383s vs 0.185s), even though hit rates are identical between
+the two (0.565 / 0.777 / 0.022) — confirming cache behavior is
+quantization-independent. But `fp32_cache` is not the fastest combination
+overall in every scenario: it only beats the uncached `fp32_no_cache`
+baseline on `long_high_reuse`, where there's real prefix overlap to exploit
+(0.442s vs 1.074s, a 2.43x win). On `high_reuse` and `no_reuse`, the honest
+lookup/insert overhead outweighs what little prefill it saves, so plain
+`fp32_no_cache` is actually fastest overall (0.186s vs 0.194s on
+`high_reuse`; 0.161s vs 0.185s on `no_reuse`) — consistent with the ~9%
+no-reuse cache tax documented in Limitations below. BFP's kernel-quality gap
+(documented above) is larger than what a cache hit can claw back regardless.
 
 ### Dashboard
 
 Not implemented yet — Phase 4b.
 
-## Limitations (Phase 1 + 2 + 3)
+## Limitations (Phase 1 + 2 + 3 + 4a)
 
 - CPU only, batch size 1 (enforced by an assertion in `generate_with_timing`) — no GPU path, no batching.
 - The BFP kernel is inference-only (no autograd/backward pass) and requires the

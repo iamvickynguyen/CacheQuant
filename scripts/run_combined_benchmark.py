@@ -1,7 +1,7 @@
-# scripts/run_combined_benchmark.py
 import copy
 import json
 import statistics
+import time
 from pathlib import Path
 
 import torch
@@ -84,14 +84,41 @@ PROMPT_SETS = {
 # across reps rather than averaged. `cached_tokens`/`hit_rate` are 0/0.0 for
 # the no-cache combos (stats is None there; substituted before this check).
 _NON_TIMING_FIELDS = ("prompt_tokens", "cached_tokens", "hit_rate")
-_TIMING_FIELDS = ("prefill_seconds", "decode_seconds", "tokens_per_sec")
+_TIMING_FIELDS = ("prefill_seconds", "decode_seconds", "tokens_per_sec", "honest_prefill_seconds")
 
 
 def _run_combo_once(model, tokenizer, prompts: list[str], use_cache: bool) -> list[dict]:
     cache = PrefixKVCache(max_tokens=DEFAULT_CONFIG.max_cache_tokens) if use_cache else None
     rows = []
     for prompt in prompts:
-        text, timing, stats = generate(model, tokenizer, prompt, cache=cache, max_new_tokens=MAX_NEW_TOKENS)
+        if use_cache:
+            # Time the *entire* call, not just the internal forward-pass
+            # timing, so cache.lookup() (before) and cache.insert() (after)
+            # - both invisible to generate's own timing - are counted. Same
+            # convention as scripts/run_kvcache_benchmark.py.
+            t0 = time.perf_counter()
+            _, timing, stats = generate(model, tokenizer, prompt, cache=cache, max_new_tokens=MAX_NEW_TOKENS)
+            total_call_seconds = time.perf_counter() - t0
+
+            cache_overhead_seconds = total_call_seconds - (timing.prefill_seconds + timing.decode_seconds)
+            if cache_overhead_seconds < 0:
+                # Every step inside generate is sequential, so
+                # total_call_seconds should never be less than the sum of its
+                # own internally-timed segments. A negative value here means
+                # timing drift/overhead elsewhere, not just "cache
+                # bookkeeping was fast" - investigate rather than clamp it
+                # silently.
+                raise RuntimeError(
+                    f"negative cache_overhead_seconds ({cache_overhead_seconds!r}) for "
+                    f"prompt {prompt!r}: total_call_seconds={total_call_seconds!r}, "
+                    f"prefill_seconds={timing.prefill_seconds!r}, "
+                    f"decode_seconds={timing.decode_seconds!r}"
+                )
+            honest_prefill_seconds = timing.prefill_seconds + cache_overhead_seconds
+        else:
+            _, timing, stats = generate(model, tokenizer, prompt, cache=cache, max_new_tokens=MAX_NEW_TOKENS)
+            honest_prefill_seconds = timing.prefill_seconds
+
         decode_seconds = timing.decode_seconds
         decode_tokens = len(timing.per_token_seconds)
         rows.append(
@@ -102,6 +129,7 @@ def _run_combo_once(model, tokenizer, prompts: list[str], use_cache: bool) -> li
                 "prefill_seconds": timing.prefill_seconds,
                 "decode_seconds": decode_seconds,
                 "tokens_per_sec": decode_tokens / decode_seconds if decode_seconds > 0 else 0.0,
+                "honest_prefill_seconds": honest_prefill_seconds,
             }
         )
     return rows
@@ -129,6 +157,7 @@ def _run_combo(model, tokenizer, prompts: list[str], use_cache: bool, label: str
 
     avg_hit_rate = sum(r["hit_rate"] for r in rows) / len(rows)
     sum_prefill = sum(r["prefill_seconds"] for r in rows)
+    total_honest_prefill_seconds = sum(r["honest_prefill_seconds"] for r in rows)
 
     return {
         "label": label,
@@ -136,6 +165,7 @@ def _run_combo(model, tokenizer, prompts: list[str], use_cache: bool, label: str
         "rows": rows,
         "avg_hit_rate": avg_hit_rate,
         "total_prefill_seconds": sum_prefill,
+        "total_honest_prefill_seconds": total_honest_prefill_seconds,
     }
 
 
