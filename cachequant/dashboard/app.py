@@ -1,4 +1,5 @@
 import copy
+import time
 
 import streamlit as st
 
@@ -74,6 +75,25 @@ PROMPT_SETS = {
 }
 
 
+def _next_prompt(prompt_set_name: str) -> str:
+    prompts = PROMPT_SETS[prompt_set_name]
+    idx = st.session_state.prompt_index[prompt_set_name]
+    prompt = prompts[idx % len(prompts)]
+    st.session_state.prompt_index[prompt_set_name] = idx + 1
+    return prompt
+
+
+def _timed_generate(model, tokenizer, prompt: str, cache):
+    # Times the ENTIRE call, not GenerationTiming's internal-only timing,
+    # so cache.lookup()/insert() overhead (invisible to `timing` itself) is
+    # captured. See Global Constraints — this is the one number that must
+    # not be shortcut.
+    t0 = time.perf_counter()
+    text, timing, stats = generate(model, tokenizer, prompt, cache=cache, max_new_tokens=MAX_NEW_TOKENS)
+    wall_seconds = time.perf_counter() - t0
+    return text, timing, stats, wall_seconds
+
+
 def _init_session_state() -> None:
     if "fp32_model" in st.session_state:
         return
@@ -100,7 +120,50 @@ def main() -> None:
     st.set_page_config(page_title="CacheQuant Dashboard", layout="wide")
     _init_session_state()
     st.title("CacheQuant — BFP quantization + KV-cache prefix reuse, live")
-    st.write("Models loaded. Sidebar controls and generation land in the next task.")
+
+    with st.sidebar:
+        use_bfp = st.radio("Quantization", ["fp32", "BFP"], index=0) == "BFP"
+        use_cache = st.toggle("Prefix cache", value=False)
+        prompt_set_name = st.radio("Prompt set", list(PROMPT_SETS.keys()), index=0)
+        generate_clicked = st.button("Generate", type="primary")
+        clear_clicked = st.button("Clear results table")
+        reset_clicked = st.button("Reset cache(s)")
+
+    if reset_clicked:
+        st.session_state.fp32_cache = PrefixKVCache(max_tokens=DEFAULT_CONFIG.max_cache_tokens)
+        st.session_state.bfp_cache = PrefixKVCache(max_tokens=DEFAULT_CONFIG.max_cache_tokens)
+        st.toast("Both caches reset.")
+
+    if clear_clicked:
+        st.session_state.results_rows = []
+        st.toast("Results table cleared.")
+
+    if generate_clicked:
+        prompt = _next_prompt(prompt_set_name)
+
+        baseline_text, baseline_timing, _, baseline_wall = _timed_generate(
+            st.session_state.fp32_model, st.session_state.tokenizer, prompt, None
+        )
+
+        if not use_bfp and not use_cache:
+            combo_text, combo_timing, combo_stats, combo_wall = (
+                baseline_text, baseline_timing, None, baseline_wall
+            )
+        else:
+            combo_model = st.session_state.bfp_model if use_bfp else st.session_state.fp32_model
+            combo_cache = None
+            if use_cache:
+                combo_cache = st.session_state.bfp_cache if use_bfp else st.session_state.fp32_cache
+            combo_text, combo_timing, combo_stats, combo_wall = _timed_generate(
+                combo_model, st.session_state.tokenizer, prompt, combo_cache
+            )
+
+        st.subheader(f"Prompt: {prompt}")
+        st.write(combo_text)
+        st.write(
+            f"combo_wall={combo_wall:.3f}s baseline_wall={baseline_wall:.3f}s "
+            f"(rendering + charting land in the next task)"
+        )
 
 
 if __name__ == "__main__":
