@@ -2,7 +2,7 @@
 
 Custom BFP-quantized kernels + KV-cache prefix reuse for faster, cheaper LLM inference. Benchmarked and visualized live.
 
-## What's built so far (Phase 1 + 2 + 3 + 4a)
+## What's built so far (Phase 1 + 2 + 3 + 4a + 4b)
 
 A clean GPT-2 small (124M) generation loop on CPU, with prefill and decode timed separately, and a benchmark harness that turns those timings into tokens/sec, latency, and cost per 1K generated tokens. This is the frozen baseline every later optimization (quantized kernel, KV-cache reuse) gets compared against. Phase 1 has no quantization or caching — every call ran full fp32 GPT-2 from scratch.
 
@@ -170,9 +170,31 @@ no-reuse cache tax documented in Limitations below. BFP's kernel-quality gap
 
 ### Dashboard
 
-Not implemented yet — Phase 4b.
+```bash
+streamlit run cachequant/dashboard/app.py
+```
 
-## Limitations (Phase 1 + 2 + 3 + 4a)
+`cachequant/dashboard/app.py` is a live Streamlit demo over `pipeline.generate`:
+sidebar toggles for quantization (fp32/BFP) and prefix-cache (on/off), a
+prompt-set picker (the same three sets as the combined benchmark), and a
+Generate button that runs the selected combo *and* the fp32/no-cache
+baseline live, every click — both timed end-to-end (not just the internal
+forward-pass timing `GenerationTiming` captures), so the on-screen cache
+overhead and cost numbers can't be inflated by hiding `PrefixKVCache`
+lookup/insert cost the way a naive `GenerationTiming`-only timer would. The
+BFP and fp32 caches are kept separate (BFP quantization changes what K/V
+values get cached, so one cache can't correctly serve both). Prefill and
+decode throughput are charted separately rather than as one aggregate
+number, since that split is what makes Phase 2's BFP break point (helps
+FLOP-bound prefill, hurts matrix-vector decode) visible during a live demo
+instead of averaged away.
+
+This is demo software for a live presentation, not a tested/production
+surface — see `docs/superpowers/specs/2026-08-14-phase4b-dashboard-design.md`
+for the full design and what was deliberately left out (real token
+streaming, a continuous prompt-overlap slider, automated dashboard tests).
+
+## Limitations (Phase 1 + 2 + 3 + 4a + 4b)
 
 - CPU only, batch size 1 (enforced by an assertion in `generate_with_timing`) — no GPU path, no batching.
 - The BFP kernel is inference-only (no autograd/backward pass) and requires the
@@ -210,7 +232,12 @@ Not implemented yet — Phase 4b.
   prefix into a fresh contiguous tensor on every request (~20MB, ~8ms for a
   276-token prefix). Block-granular storage with a block table, rather than
   per-token nodes, is what production caches use to avoid both costs.
-- No dashboard yet — Phase 4b.
+- The dashboard (`cachequant/dashboard/app.py`) is demo software: no
+  automated tests, no input validation, single-file, single-operator. Its
+  simulated token stream replays an already-complete generation rather than
+  showing tokens as they're actually computed (true streaming would need an
+  `on_token` callback threaded through the core generation functions, which
+  this pass didn't add).
 - Benchmark numbers are from one dev machine; re-run `scripts/run_baseline.py` locally before trusting exact figures on different hardware.
 - `max_new_tokens=0` isn't validated — the loop still emits one token in that case.
 - Only tested against Python 3.14.
