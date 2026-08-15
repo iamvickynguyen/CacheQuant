@@ -4,6 +4,7 @@ import time
 import streamlit as st
 
 from cachequant.bench.config import DEFAULT_CONFIG
+from cachequant.bench.harness import compute_bench_result
 from cachequant.kernel.bfp_linear import apply_bfp_quantization
 from cachequant.kvcache.trie_cache import PrefixKVCache
 from cachequant.model import load_model
@@ -73,6 +74,25 @@ PROMPT_SETS = {
     "long_high_reuse": LONG_HIGH_REUSE_PROMPTS,
     "no_reuse": NO_REUSE_PROMPTS,
 }
+
+STREAM_DELAY_SECONDS = 0.04
+
+
+def _render_stream(text: str) -> None:
+    placeholder = st.empty()
+    words = text.split(" ")
+    shown = ""
+    for word in words:
+        shown = f"{shown} {word}".strip()
+        placeholder.markdown(shown)
+        time.sleep(STREAM_DELAY_SECONDS)
+
+
+def _cost_per_1k(wall_seconds: float, generated_tokens: int) -> float:
+    if generated_tokens <= 0:
+        return 0.0
+    seconds_per_token = wall_seconds / generated_tokens
+    return (DEFAULT_CONFIG.dollars_per_hour / 3600) * seconds_per_token * 1000
 
 
 def _next_prompt(prompt_set_name: str) -> str:
@@ -159,11 +179,66 @@ def main() -> None:
             )
 
         st.subheader(f"Prompt: {prompt}")
-        st.write(combo_text)
-        st.write(
-            f"combo_wall={combo_wall:.3f}s baseline_wall={baseline_wall:.3f}s "
-            f"(rendering + charting land in the next task)"
+        _render_stream(combo_text)
+
+        baseline_bench = compute_bench_result(baseline_timing, DEFAULT_CONFIG)
+        combo_bench = compute_bench_result(combo_timing, DEFAULT_CONFIG)
+        baseline_cost = _cost_per_1k(baseline_wall, baseline_timing.total_generated_tokens)
+        combo_cost = _cost_per_1k(combo_wall, combo_timing.total_generated_tokens)
+
+        # Prefill and decode charted separately, not as one aggregate
+        # tokens/sec: Phase 2 found BFP helps FLOP-bound prefill and hurts
+        # matrix-vector decode, and an aggregate number averages that
+        # finding away. This split is the main change from the original
+        # Phase 4 sketch's single before/after bar chart.
+        col1, col2 = st.columns(2)
+        with col1:
+            st.metric(
+                "Prefill tok/s",
+                f"{combo_bench.prefill_tokens_per_sec:.1f}",
+                f"{combo_bench.prefill_tokens_per_sec - baseline_bench.prefill_tokens_per_sec:+.1f}",
+            )
+            st.metric(
+                "Decode tok/s",
+                f"{combo_bench.decode_tokens_per_sec:.1f}",
+                f"{combo_bench.decode_tokens_per_sec - baseline_bench.decode_tokens_per_sec:+.1f}",
+            )
+        with col2:
+            st.metric(
+                "Wall clock (s)",
+                f"{combo_wall:.3f}",
+                f"{combo_wall - baseline_wall:+.3f}",
+                delta_color="inverse",
+            )
+            st.metric(
+                "Cost / 1K tokens ($)",
+                f"{combo_cost:.5f}",
+                f"{combo_cost - baseline_cost:+.5f}",
+                delta_color="inverse",
+            )
+
+        label = ("bfp" if use_bfp else "fp32") + ("+cache" if use_cache else "")
+        cache_detail = "—"
+        if combo_stats is not None:
+            cache_detail = (
+                f"{combo_stats.cached_tokens}/{combo_stats.prompt_tokens} reused "
+                f"({combo_stats.hit_rate:.0%})"
+            )
+        st.session_state.results_rows.append(
+            {
+                "config": label,
+                "prompt_set": prompt_set_name,
+                "prefill_tok_s": round(combo_bench.prefill_tokens_per_sec, 1),
+                "decode_tok_s": round(combo_bench.decode_tokens_per_sec, 1),
+                "wall_seconds": round(combo_wall, 3),
+                "cost_per_1k": round(combo_cost, 5),
+                "cache": cache_detail,
+            }
         )
+
+    if st.session_state.results_rows:
+        st.subheader("Results")
+        st.dataframe(st.session_state.results_rows)
 
 
 if __name__ == "__main__":
