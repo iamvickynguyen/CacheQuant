@@ -1,7 +1,9 @@
 import copy
 import time
 
+import numba
 import streamlit as st
+import torch
 
 from cachequant.bench.config import DEFAULT_CONFIG
 from cachequant.bench.harness import compute_bench_result
@@ -63,7 +65,7 @@ LONG_HIGH_REUSE_SUFFIXES = [
     "who designed the Analytical Engine?",
     "which decade did personal computers emerge in?",
     "what law describes the growth in computing power?",
-    "where was the transistor invented?",
+    "what 1947 invention triggered a wave of miniaturization?",
 ]
 LONG_HIGH_REUSE_PROMPTS = [
     LONG_HIGH_REUSE_PREAMBLE + suffix for suffix in LONG_HIGH_REUSE_SUFFIXES
@@ -78,14 +80,39 @@ PROMPT_SETS = {
 STREAM_DELAY_SECONDS = 0.04
 
 
-def _render_stream(text: str) -> None:
+def _render_stream(text: str, prompt: str, tokenizer) -> None:
+    # pipeline.generate returns prompt + continuation decoded together.
+    # Stream only the newly-generated portion — the prompt is already shown
+    # above via st.subheader. Compare against the tokenizer's own round-trip
+    # of the prompt (not the raw prompt string) since GPT-2's BPE decode may
+    # not be byte-identical to the original text (whitespace handling).
+    decoded_prompt = tokenizer.decode(tokenizer.encode(prompt), skip_special_tokens=True)
+    generated_only = text[len(decoded_prompt):] if text.startswith(decoded_prompt) else text
     placeholder = st.empty()
-    words = text.split(" ")
+    words = generated_only.split(" ")
     shown = ""
     for word in words:
         shown = f"{shown} {word}".strip()
         placeholder.markdown(shown)
         time.sleep(STREAM_DELAY_SECONDS)
+
+
+def _prefill_tokens_per_sec(timing, stats, wall_seconds: float) -> float:
+    if stats is None:
+        # No cache: compute_bench_result's number is already correct —
+        # prefill_tokens is the full prompt, prefill_seconds is the whole
+        # (only) forward pass.
+        return timing.prefill_tokens / timing.prefill_seconds if timing.prefill_seconds > 0 else 0.0
+    # Cache-on: timing.prefill_tokens/timing.prefill_seconds only cover the
+    # recomputed suffix and the internal forward pass — blind to
+    # cache.lookup()/insert() overhead and undercounts the token base
+    # (should be the full prompt, since the cache genuinely served the
+    # rest). Recover both from the honestly-measured wall_seconds, same
+    # convention as scripts/run_combined_benchmark.py's honest_prefill_seconds.
+    decode_seconds = timing.decode_seconds
+    cache_overhead_seconds = wall_seconds - (timing.prefill_seconds + decode_seconds)
+    honest_prefill_seconds = timing.prefill_seconds + cache_overhead_seconds
+    return stats.prompt_tokens / honest_prefill_seconds if honest_prefill_seconds > 0 else 0.0
 
 
 def _cost_per_1k(wall_seconds: float, generated_tokens: int) -> float:
@@ -119,6 +146,14 @@ def _init_session_state() -> None:
         return
 
     with st.spinner("Loading GPT-2, quantizing BFP copy, warming up both models..."):
+        # Pin both thread pools before any timed run. torch and numba have
+        # independent thread pools; without this BFP's numba matmul runs on
+        # every logical core while fp32's torch path is unpinned/different,
+        # making the on-screen comparison not apples-to-apples. Same
+        # convention as scripts/run_bfp_benchmark.py's main().
+        torch.set_num_threads(DEFAULT_CONFIG.cpu_threads)
+        numba.set_num_threads(DEFAULT_CONFIG.cpu_threads)
+
         fp32_model, tokenizer = load_model()
         bfp_model = apply_bfp_quantization(copy.deepcopy(fp32_model))
 
@@ -126,6 +161,17 @@ def _init_session_state() -> None:
         # JIT compile time is never displayed to the user as a measurement.
         generate(fp32_model, tokenizer, WARMUP_PROMPT, max_new_tokens=WARMUP_MAX_NEW_TOKENS)
         generate(bfp_model, tokenizer, WARMUP_PROMPT, max_new_tokens=WARMUP_MAX_NEW_TOKENS)
+
+        # Also warm up the cache code path (first DynamicCache construction,
+        # first tensor permute/contiguous allocations inside
+        # generate_with_prefix_cache) so those one-time costs aren't paid
+        # inside the honestly-measured perf_counter window on the user's
+        # first cache-on click. Uses throwaway caches, not the real session
+        # caches below, which must stay genuinely cold.
+        warmup_cache = PrefixKVCache(max_tokens=DEFAULT_CONFIG.max_cache_tokens)
+        generate(fp32_model, tokenizer, WARMUP_PROMPT, cache=warmup_cache, max_new_tokens=WARMUP_MAX_NEW_TOKENS)
+        warmup_cache_bfp = PrefixKVCache(max_tokens=DEFAULT_CONFIG.max_cache_tokens)
+        generate(bfp_model, tokenizer, WARMUP_PROMPT, cache=warmup_cache_bfp, max_new_tokens=WARMUP_MAX_NEW_TOKENS)
 
     st.session_state.fp32_model = fp32_model
     st.session_state.bfp_model = bfp_model
@@ -179,12 +225,18 @@ def main() -> None:
             )
 
         st.subheader(f"Prompt: {prompt}")
-        _render_stream(combo_text)
+        _render_stream(combo_text, prompt, st.session_state.tokenizer)
 
         baseline_bench = compute_bench_result(baseline_timing, DEFAULT_CONFIG)
         combo_bench = compute_bench_result(combo_timing, DEFAULT_CONFIG)
         baseline_cost = _cost_per_1k(baseline_wall, baseline_timing.total_generated_tokens)
         combo_cost = _cost_per_1k(combo_wall, combo_timing.total_generated_tokens)
+        # compute_bench_result's prefill_tokens_per_sec is blind to
+        # cache.lookup()/insert() overhead and undercounts the token base on
+        # the cache-on path (see _prefill_tokens_per_sec). baseline is
+        # always no-cache (stats=None), so this is a no-op there.
+        baseline_prefill_tok_s = _prefill_tokens_per_sec(baseline_timing, None, baseline_wall)
+        combo_prefill_tok_s = _prefill_tokens_per_sec(combo_timing, combo_stats, combo_wall)
 
         # Prefill and decode charted separately, not as one aggregate
         # tokens/sec: Phase 2 found BFP helps FLOP-bound prefill and hurts
@@ -195,8 +247,8 @@ def main() -> None:
         with col1:
             st.metric(
                 "Prefill tok/s",
-                f"{combo_bench.prefill_tokens_per_sec:.1f}",
-                f"{combo_bench.prefill_tokens_per_sec - baseline_bench.prefill_tokens_per_sec:+.1f}",
+                f"{combo_prefill_tok_s:.1f}",
+                f"{combo_prefill_tok_s - baseline_prefill_tok_s:+.1f}",
             )
             st.metric(
                 "Decode tok/s",
@@ -228,10 +280,11 @@ def main() -> None:
             {
                 "config": label,
                 "prompt_set": prompt_set_name,
-                "prefill_tok_s": round(combo_bench.prefill_tokens_per_sec, 1),
+                "prefill_tok_s": round(combo_prefill_tok_s, 1),
                 "decode_tok_s": round(combo_bench.decode_tokens_per_sec, 1),
                 "wall_seconds": round(combo_wall, 3),
                 "cost_per_1k": round(combo_cost, 5),
+                "gen_tokens": combo_timing.total_generated_tokens,
                 "cache": cache_detail,
             }
         )

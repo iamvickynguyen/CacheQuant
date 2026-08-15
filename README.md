@@ -171,7 +171,7 @@ no-reuse cache tax documented in Limitations below. BFP's kernel-quality gap
 ### Dashboard
 
 ```bash
-streamlit run cachequant/dashboard/app.py
+streamlit run cachequant/dashboard/app.py --server.address 127.0.0.1
 ```
 
 `cachequant/dashboard/app.py` is a live Streamlit demo over `pipeline.generate`:
@@ -184,7 +184,7 @@ overhead and cost numbers can't be inflated by hiding `PrefixKVCache`
 lookup/insert cost the way a naive `GenerationTiming`-only timer would. The
 BFP and fp32 caches are kept separate (BFP quantization changes what K/V
 values get cached, so one cache can't correctly serve both). Prefill and
-decode throughput are charted separately rather than as one aggregate
+decode throughput are shown as separate metrics rather than as one aggregate
 number, since that split is what makes Phase 2's BFP break point (helps
 FLOP-bound prefill, hurts matrix-vector decode) visible during a live demo
 instead of averaged away.
