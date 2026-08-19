@@ -1,0 +1,220 @@
+{
+  "provenance": {
+    "platform_processor": "",
+    "cpu_model": "Intel(R) Core(TM) i7-8700K CPU @ 3.70GHz",
+    "platform_machine": "x86_64",
+    "cpu_count": 12,
+    "torch_version": "2.13.0+cu130",
+    "transformers_version": "5.14.1"
+  },
+  "results": [
+    {
+      "case": "empty_prompt",
+      "combo": "fp32_no_cache",
+      "prompt_tokens": 0,
+      "max_new_tokens": 10,
+      "outcome": "RuntimeError: cannot reshape tensor of 0 elements into shape [-1, 0] because the unspecified dimension size -1 can be any value and is ambiguous",
+      "wall_seconds": 0.0010596609999993234
+    },
+    {
+      "case": "empty_prompt",
+      "combo": "fp32_cache",
+      "prompt_tokens": 0,
+      "max_new_tokens": 10,
+      "outcome": "RuntimeError: cannot reshape tensor of 0 elements into shape [-1, 0] because the unspecified dimension size -1 can be any value and is ambiguous",
+      "wall_seconds": 0.0006741610004610266
+    },
+    {
+      "case": "empty_prompt",
+      "combo": "bfp_no_cache",
+      "prompt_tokens": 0,
+      "max_new_tokens": 10,
+      "outcome": "RuntimeError: cannot reshape tensor of 0 elements into shape [-1, 0] because the unspecified dimension size -1 can be any value and is ambiguous",
+      "wall_seconds": 0.0007012109999777749
+    },
+    {
+      "case": "empty_prompt",
+      "combo": "bfp_cache",
+      "prompt_tokens": 0,
+      "max_new_tokens": 10,
+      "outcome": "RuntimeError: cannot reshape tensor of 0 elements into shape [-1, 0] because the unspecified dimension size -1 can be any value and is ambiguous",
+      "wall_seconds": 0.0005963060002613929
+    },
+    {
+      "case": "whitespace_prompt",
+      "combo": "fp32_no_cache",
+      "prompt_tokens": 3,
+      "max_new_tokens": 10,
+      "outcome": "success",
+      "wall_seconds": 0.2644871880002029
+    },
+    {
+      "case": "whitespace_prompt",
+      "combo": "fp32_cache",
+      "prompt_tokens": 3,
+      "max_new_tokens": 10,
+      "outcome": "success",
+      "wall_seconds": 0.2678869979999945
+    },
+    {
+      "case": "whitespace_prompt",
+      "combo": "bfp_no_cache",
+      "prompt_tokens": 3,
+      "max_new_tokens": 10,
+      "outcome": "success",
+      "wall_seconds": 0.27757409999958327
+    },
+    {
+      "case": "whitespace_prompt",
+      "combo": "bfp_cache",
+      "prompt_tokens": 3,
+      "max_new_tokens": 10,
+      "outcome": "success",
+      "wall_seconds": 0.2799798780006313
+    },
+    {
+      "case": "over_context_prompt",
+      "combo": "fp32_no_cache",
+      "prompt_tokens": 1100,
+      "max_new_tokens": 5,
+      "outcome": "IndexError: index out of range in self",
+      "wall_seconds": 0.00422613199953048
+    },
+    {
+      "case": "over_context_prompt",
+      "combo": "fp32_cache",
+      "prompt_tokens": 1100,
+      "max_new_tokens": 5,
+      "outcome": "IndexError: index out of range in self",
+      "wall_seconds": 0.003244501000153832
+    },
+    {
+      "case": "over_context_prompt",
+      "combo": "bfp_no_cache",
+      "prompt_tokens": 1100,
+      "max_new_tokens": 5,
+      "outcome": "IndexError: index out of range in self",
+      "wall_seconds": 0.0039452380005968735
+    },
+    {
+      "case": "over_context_prompt",
+      "combo": "bfp_cache",
+      "prompt_tokens": 1100,
+      "max_new_tokens": 5,
+      "outcome": "IndexError: index out of range in self",
+      "wall_seconds": 0.0035699910004041158
+    },
+    {
+      "case": "at_context_prompt",
+      "combo": "fp32_no_cache",
+      "prompt_tokens": 1024,
+      "max_new_tokens": 5,
+      "outcome": "IndexError: index out of range in self",
+      "wall_seconds": 0.9122210219993576
+    },
+    {
+      "case": "at_context_prompt",
+      "combo": "fp32_cache",
+      "prompt_tokens": 1024,
+      "max_new_tokens": 5,
+      "outcome": "IndexError: index out of range in self",
+      "wall_seconds": 0.928788385000189
+    },
+    {
+      "case": "at_context_prompt",
+      "combo": "bfp_no_cache",
+      "prompt_tokens": 1024,
+      "max_new_tokens": 5,
+      "outcome": "IndexError: index out of range in self",
+      "wall_seconds": 4.080223588000081
+    },
+    {
+      "case": "at_context_prompt",
+      "combo": "bfp_cache",
+      "prompt_tokens": 1024,
+      "max_new_tokens": 5,
+      "outcome": "IndexError: index out of range in self",
+      "wall_seconds": 4.349821961000089
+    },
+    {
+      "case": "zero_max_new_tokens",
+      "combo": "fp32_no_cache",
+      "prompt_tokens": 6,
+      "max_new_tokens": 0,
+      "outcome": "success",
+      "wall_seconds": 0.033827336999820545
+    },
+    {
+      "case": "zero_max_new_tokens",
+      "combo": "fp32_cache",
+      "prompt_tokens": 6,
+      "max_new_tokens": 0,
+      "outcome": "success",
+      "wall_seconds": 0.038897256000382185
+    },
+    {
+      "case": "zero_max_new_tokens",
+      "combo": "bfp_no_cache",
+      "prompt_tokens": 6,
+      "max_new_tokens": 0,
+      "outcome": "success",
+      "wall_seconds": 0.07971950899991498
+    },
+    {
+      "case": "zero_max_new_tokens",
+      "combo": "bfp_cache",
+      "prompt_tokens": 6,
+      "max_new_tokens": 0,
+      "outcome": "success",
+      "wall_seconds": 0.09225516700007574
+    },
+    {
+      "case": "large_max_new_tokens",
+      "combo": "fp32_no_cache",
+      "prompt_tokens": 6,
+      "max_new_tokens": 200,
+      "outcome": "success",
+      "wall_seconds": 5.75910464899971
+    },
+    {
+      "case": "large_max_new_tokens",
+      "combo": "fp32_cache",
+      "prompt_tokens": 6,
+      "max_new_tokens": 200,
+      "outcome": "success",
+      "wall_seconds": 7.129171913999926
+    },
+    {
+      "case": "large_max_new_tokens",
+      "combo": "bfp_no_cache",
+      "prompt_tokens": 6,
+      "max_new_tokens": 200,
+      "outcome": "success",
+      "wall_seconds": 6.408134733999759
+    },
+    {
+      "case": "large_max_new_tokens",
+      "combo": "bfp_cache",
+      "prompt_tokens": 6,
+      "max_new_tokens": 200,
+      "outcome": "success",
+      "wall_seconds": 6.3469246089998705
+    },
+    {
+      "case": "cache_eviction_pressure",
+      "combo": "fp32_cache",
+      "prompt_tokens": null,
+      "max_new_tokens": 5,
+      "outcome": "success",
+      "wall_seconds": 3.205597375000252
+    },
+    {
+      "case": "cache_eviction_pressure",
+      "combo": "bfp_cache",
+      "prompt_tokens": null,
+      "max_new_tokens": 5,
+      "outcome": "success",
+      "wall_seconds": 8.557045047999964
+    }
+  ]
+}
