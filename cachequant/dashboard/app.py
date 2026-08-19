@@ -1,5 +1,7 @@
 import copy
+import json
 import time
+from pathlib import Path
 
 import numba
 import streamlit as st
@@ -77,7 +79,25 @@ PROMPT_SETS = {
     "no_reuse": NO_REUSE_PROMPTS,
 }
 
+FIXTURE_PATH = Path(__file__).resolve().parent / "fixtures" / "replay.json"
+
+
+def _load_replay_fixture() -> dict[tuple[str, str], dict]:
+    data = json.loads(FIXTURE_PATH.read_text())
+    return {(e["prompt_set"], e["combo"]): e for e in data["entries"]}
+
+
 STREAM_DELAY_SECONDS = 0.04
+
+
+def _stream_words(text: str) -> None:
+    placeholder = st.empty()
+    words = text.split(" ")
+    shown = ""
+    for word in words:
+        shown = f"{shown} {word}".strip()
+        placeholder.markdown(shown)
+        time.sleep(STREAM_DELAY_SECONDS)
 
 
 def _render_stream(text: str, prompt: str, tokenizer) -> None:
@@ -88,13 +108,7 @@ def _render_stream(text: str, prompt: str, tokenizer) -> None:
     # not be byte-identical to the original text (whitespace handling).
     decoded_prompt = tokenizer.decode(tokenizer.encode(prompt), skip_special_tokens=True)
     generated_only = text[len(decoded_prompt):] if text.startswith(decoded_prompt) else text
-    placeholder = st.empty()
-    words = generated_only.split(" ")
-    shown = ""
-    for word in words:
-        shown = f"{shown} {word}".strip()
-        placeholder.markdown(shown)
-        time.sleep(STREAM_DELAY_SECONDS)
+    _stream_words(generated_only)
 
 
 def _prefill_tokens_per_sec(timing, stats, wall_seconds: float) -> float:
@@ -141,7 +155,19 @@ def _timed_generate(model, tokenizer, prompt: str, cache):
     return text, timing, stats, wall_seconds
 
 
-def _init_session_state() -> None:
+def _init_session_state(replay_mode: bool) -> None:
+    if "results_rows" not in st.session_state:
+        st.session_state.results_rows = []
+        st.session_state.prompt_index = {name: 0 for name in PROMPT_SETS}
+
+    if replay_mode:
+        # Offline fallback path: no load_model(), no apply_bfp_quantization(),
+        # no warmup - nothing here can fail the way the live path can (model
+        # download, JIT compile stall, OOM, slow CPU). This is the whole point.
+        if "replay_fixture" not in st.session_state:
+            st.session_state.replay_fixture = _load_replay_fixture()
+        return
+
     if "fp32_model" in st.session_state:
         return
 
@@ -178,14 +204,15 @@ def _init_session_state() -> None:
     st.session_state.tokenizer = tokenizer
     st.session_state.fp32_cache = PrefixKVCache(max_tokens=DEFAULT_CONFIG.max_cache_tokens)
     st.session_state.bfp_cache = PrefixKVCache(max_tokens=DEFAULT_CONFIG.max_cache_tokens)
-    st.session_state.results_rows = []
-    st.session_state.prompt_index = {name: 0 for name in PROMPT_SETS}
 
 
 def main() -> None:
     st.set_page_config(page_title="CacheQuant Dashboard", layout="wide")
-    _init_session_state()
+    replay_mode = st.sidebar.toggle("Replay (offline)", value=False)
+    _init_session_state(replay_mode)
     st.title("CacheQuant — BFP quantization + KV-cache prefix reuse, live")
+    if replay_mode:
+        st.sidebar.caption("Offline replay: pre-captured runs, no live model — safe if the live demo breaks.")
 
     with st.sidebar:
         use_bfp = st.radio("Quantization", ["fp32", "BFP"], index=0) == "BFP"
@@ -193,9 +220,9 @@ def main() -> None:
         prompt_set_name = st.radio("Prompt set", list(PROMPT_SETS.keys()), index=0)
         generate_clicked = st.button("Generate", type="primary")
         clear_clicked = st.button("Clear results table")
-        reset_clicked = st.button("Reset cache(s)")
+        reset_clicked = st.button("Reset cache(s)", disabled=replay_mode)
 
-    if reset_clicked:
+    if reset_clicked and not replay_mode:
         st.session_state.fp32_cache = PrefixKVCache(max_tokens=DEFAULT_CONFIG.max_cache_tokens)
         st.session_state.bfp_cache = PrefixKVCache(max_tokens=DEFAULT_CONFIG.max_cache_tokens)
         st.toast("Both caches reset.")
@@ -205,89 +232,139 @@ def main() -> None:
         st.toast("Results table cleared.")
 
     if generate_clicked:
-        prompt = _next_prompt(prompt_set_name)
+        combo_key = ("bfp" if use_bfp else "fp32") + ("_cache" if use_cache else "_no_cache")
 
-        baseline_text, baseline_timing, _, baseline_wall = _timed_generate(
-            st.session_state.fp32_model, st.session_state.tokenizer, prompt, None
-        )
+        if replay_mode:
+            fixture = st.session_state.replay_fixture
+            baseline_entry = fixture[(prompt_set_name, "fp32_no_cache")]
+            combo_entry = fixture[(prompt_set_name, combo_key)]
 
-        if not use_bfp and not use_cache:
-            combo_text, combo_timing, combo_stats, combo_wall = (
-                baseline_text, baseline_timing, None, baseline_wall
+            st.subheader(f"Prompt: {combo_entry['prompt']}")
+            _stream_words(combo_entry["generated_only"])
+
+            col1, col2 = st.columns(2)
+            with col1:
+                st.metric(
+                    "Prefill tok/s",
+                    f"{combo_entry['prefill_tok_s']:.1f}",
+                    f"{combo_entry['prefill_tok_s'] - baseline_entry['prefill_tok_s']:+.1f}",
+                )
+                st.metric(
+                    "Decode tok/s",
+                    f"{combo_entry['decode_tok_s']:.1f}",
+                    f"{combo_entry['decode_tok_s'] - baseline_entry['decode_tok_s']:+.1f}",
+                )
+            with col2:
+                st.metric(
+                    "Wall clock (s)",
+                    f"{combo_entry['wall_seconds']:.3f}",
+                    f"{combo_entry['wall_seconds'] - baseline_entry['wall_seconds']:+.3f}",
+                    delta_color="inverse",
+                )
+                st.metric(
+                    "Cost / 1K tokens ($)",
+                    f"{combo_entry['cost_per_1k']:.5f}",
+                    f"{combo_entry['cost_per_1k'] - baseline_entry['cost_per_1k']:+.5f}",
+                    delta_color="inverse",
+                )
+
+            label = ("bfp" if use_bfp else "fp32") + ("+cache" if use_cache else "")
+            st.session_state.results_rows.append(
+                {
+                    "config": label,
+                    "prompt_set": prompt_set_name,
+                    "prefill_tok_s": round(combo_entry["prefill_tok_s"], 1),
+                    "decode_tok_s": round(combo_entry["decode_tok_s"], 1),
+                    "wall_seconds": round(combo_entry["wall_seconds"], 3),
+                    "cost_per_1k": round(combo_entry["cost_per_1k"], 5),
+                    "gen_tokens": combo_entry["gen_tokens"],
+                    "cache": combo_entry["cache_detail"],
+                }
             )
         else:
-            combo_model = st.session_state.bfp_model if use_bfp else st.session_state.fp32_model
-            combo_cache = None
-            if use_cache:
-                combo_cache = st.session_state.bfp_cache if use_bfp else st.session_state.fp32_cache
-            combo_text, combo_timing, combo_stats, combo_wall = _timed_generate(
-                combo_model, st.session_state.tokenizer, prompt, combo_cache
+            prompt = _next_prompt(prompt_set_name)
+
+            baseline_text, baseline_timing, _, baseline_wall = _timed_generate(
+                st.session_state.fp32_model, st.session_state.tokenizer, prompt, None
             )
 
-        st.subheader(f"Prompt: {prompt}")
-        _render_stream(combo_text, prompt, st.session_state.tokenizer)
+            if not use_bfp and not use_cache:
+                combo_text, combo_timing, combo_stats, combo_wall = (
+                    baseline_text, baseline_timing, None, baseline_wall
+                )
+            else:
+                combo_model = st.session_state.bfp_model if use_bfp else st.session_state.fp32_model
+                combo_cache = None
+                if use_cache:
+                    combo_cache = st.session_state.bfp_cache if use_bfp else st.session_state.fp32_cache
+                combo_text, combo_timing, combo_stats, combo_wall = _timed_generate(
+                    combo_model, st.session_state.tokenizer, prompt, combo_cache
+                )
 
-        baseline_bench = compute_bench_result(baseline_timing, DEFAULT_CONFIG)
-        combo_bench = compute_bench_result(combo_timing, DEFAULT_CONFIG)
-        baseline_cost = _cost_per_1k(baseline_wall, baseline_timing.total_generated_tokens)
-        combo_cost = _cost_per_1k(combo_wall, combo_timing.total_generated_tokens)
-        # compute_bench_result's prefill_tokens_per_sec is blind to
-        # cache.lookup()/insert() overhead and undercounts the token base on
-        # the cache-on path (see _prefill_tokens_per_sec). baseline is
-        # always no-cache (stats=None), so this is a no-op there.
-        baseline_prefill_tok_s = _prefill_tokens_per_sec(baseline_timing, None, baseline_wall)
-        combo_prefill_tok_s = _prefill_tokens_per_sec(combo_timing, combo_stats, combo_wall)
+            st.subheader(f"Prompt: {prompt}")
+            _render_stream(combo_text, prompt, st.session_state.tokenizer)
 
-        # Prefill and decode charted separately, not as one aggregate
-        # tokens/sec: Phase 2 found BFP helps FLOP-bound prefill and hurts
-        # matrix-vector decode, and an aggregate number averages that
-        # finding away. This split is the main change from the original
-        # Phase 4 sketch's single before/after bar chart.
-        col1, col2 = st.columns(2)
-        with col1:
-            st.metric(
-                "Prefill tok/s",
-                f"{combo_prefill_tok_s:.1f}",
-                f"{combo_prefill_tok_s - baseline_prefill_tok_s:+.1f}",
-            )
-            st.metric(
-                "Decode tok/s",
-                f"{combo_bench.decode_tokens_per_sec:.1f}",
-                f"{combo_bench.decode_tokens_per_sec - baseline_bench.decode_tokens_per_sec:+.1f}",
-            )
-        with col2:
-            st.metric(
-                "Wall clock (s)",
-                f"{combo_wall:.3f}",
-                f"{combo_wall - baseline_wall:+.3f}",
-                delta_color="inverse",
-            )
-            st.metric(
-                "Cost / 1K tokens ($)",
-                f"{combo_cost:.5f}",
-                f"{combo_cost - baseline_cost:+.5f}",
-                delta_color="inverse",
-            )
+            baseline_bench = compute_bench_result(baseline_timing, DEFAULT_CONFIG)
+            combo_bench = compute_bench_result(combo_timing, DEFAULT_CONFIG)
+            baseline_cost = _cost_per_1k(baseline_wall, baseline_timing.total_generated_tokens)
+            combo_cost = _cost_per_1k(combo_wall, combo_timing.total_generated_tokens)
+            # compute_bench_result's prefill_tokens_per_sec is blind to
+            # cache.lookup()/insert() overhead and undercounts the token base on
+            # the cache-on path (see _prefill_tokens_per_sec). baseline is
+            # always no-cache (stats=None), so this is a no-op there.
+            baseline_prefill_tok_s = _prefill_tokens_per_sec(baseline_timing, None, baseline_wall)
+            combo_prefill_tok_s = _prefill_tokens_per_sec(combo_timing, combo_stats, combo_wall)
 
-        label = ("bfp" if use_bfp else "fp32") + ("+cache" if use_cache else "")
-        cache_detail = "—"
-        if combo_stats is not None:
-            cache_detail = (
-                f"{combo_stats.cached_tokens}/{combo_stats.prompt_tokens} reused "
-                f"({combo_stats.hit_rate:.0%})"
+            # Prefill and decode charted separately, not as one aggregate
+            # tokens/sec: Phase 2 found BFP helps FLOP-bound prefill and hurts
+            # matrix-vector decode, and an aggregate number averages that
+            # finding away. This split is the main change from the original
+            # Phase 4 sketch's single before/after bar chart.
+            col1, col2 = st.columns(2)
+            with col1:
+                st.metric(
+                    "Prefill tok/s",
+                    f"{combo_prefill_tok_s:.1f}",
+                    f"{combo_prefill_tok_s - baseline_prefill_tok_s:+.1f}",
+                )
+                st.metric(
+                    "Decode tok/s",
+                    f"{combo_bench.decode_tokens_per_sec:.1f}",
+                    f"{combo_bench.decode_tokens_per_sec - baseline_bench.decode_tokens_per_sec:+.1f}",
+                )
+            with col2:
+                st.metric(
+                    "Wall clock (s)",
+                    f"{combo_wall:.3f}",
+                    f"{combo_wall - baseline_wall:+.3f}",
+                    delta_color="inverse",
+                )
+                st.metric(
+                    "Cost / 1K tokens ($)",
+                    f"{combo_cost:.5f}",
+                    f"{combo_cost - baseline_cost:+.5f}",
+                    delta_color="inverse",
+                )
+
+            label = ("bfp" if use_bfp else "fp32") + ("+cache" if use_cache else "")
+            cache_detail = "—"
+            if combo_stats is not None:
+                cache_detail = (
+                    f"{combo_stats.cached_tokens}/{combo_stats.prompt_tokens} reused "
+                    f"({combo_stats.hit_rate:.0%})"
+                )
+            st.session_state.results_rows.append(
+                {
+                    "config": label,
+                    "prompt_set": prompt_set_name,
+                    "prefill_tok_s": round(combo_prefill_tok_s, 1),
+                    "decode_tok_s": round(combo_bench.decode_tokens_per_sec, 1),
+                    "wall_seconds": round(combo_wall, 3),
+                    "cost_per_1k": round(combo_cost, 5),
+                    "gen_tokens": combo_timing.total_generated_tokens,
+                    "cache": cache_detail,
+                }
             )
-        st.session_state.results_rows.append(
-            {
-                "config": label,
-                "prompt_set": prompt_set_name,
-                "prefill_tok_s": round(combo_prefill_tok_s, 1),
-                "decode_tok_s": round(combo_bench.decode_tokens_per_sec, 1),
-                "wall_seconds": round(combo_wall, 3),
-                "cost_per_1k": round(combo_cost, 5),
-                "gen_tokens": combo_timing.total_generated_tokens,
-                "cache": cache_detail,
-            }
-        )
 
     if st.session_state.results_rows:
         st.subheader("Results")
