@@ -2,7 +2,7 @@
 
 Custom BFP-quantized kernels + KV-cache prefix reuse for faster, cheaper LLM inference. Benchmarked and visualized live.
 
-## What's built so far (Phase 1 + 2 + 3 + 4a + 4b)
+## What's built so far (Phase 1 + 2 + 3 + 4a + 4b + 5)
 
 A clean GPT-2 small (124M) generation loop on CPU, with prefill and decode timed separately, and a benchmark harness that turns those timings into tokens/sec, latency, and cost per 1K generated tokens. This is the frozen baseline every later optimization (quantized kernel, KV-cache reuse) gets compared against. Phase 1 has no quantization or caching — every call ran full fp32 GPT-2 from scratch.
 
@@ -194,6 +194,54 @@ surface — see `docs/superpowers/specs/2026-08-14-phase4b-dashboard-design.md`
 for the full design and what was deliberately left out (real token
 streaming, a continuous prompt-overlap slider, automated dashboard tests).
 
+Phase 5 makes the project demo-ready: `scripts/stress_test.py` runs
+pathological inputs (empty/whitespace prompts, prompts at and past GPT-2's
+1024-token limit, `max_new_tokens=0` and 200, cache-eviction pressure)
+across all four toggle combos and records what actually happens — see
+Break points below. `scripts/export_slide_charts.py` re-runs every
+benchmark fresh and exports slide-ready charts and tables to
+`benchmarks/charts/`. The dashboard gets an offline replay mode
+(`cachequant/dashboard/app.py`, fixture captured by
+`scripts/capture_replay_fixture.py`) that streams pre-captured runs with no
+model load and no live compute — the actual fallback if the live demo
+breaks during the talk. See
+`docs/superpowers/specs/2026-08-19-phase5-demo-readiness-design.md` for the
+full design.
+
+### Chart export
+
+```bash
+python scripts/export_slide_charts.py
+```
+
+Re-runs `run_baseline.py`, `run_bfp_benchmark.py`, `run_kvcache_benchmark.py`,
+and `run_combined_benchmark.py` fresh (takes several minutes), then writes
+`benchmarks/charts/*.png` and `benchmarks/charts/summary.md`.
+
+### Offline replay mode (demo fallback)
+
+```bash
+python scripts/capture_replay_fixture.py   # regenerate the fixture after any pipeline change
+streamlit run cachequant/dashboard/app.py --server.address 127.0.0.1
+```
+
+Toggle **Replay (offline)** in the sidebar before clicking Generate. This
+path never loads a model or calls the real pipeline — it streams
+pre-captured runs from `cachequant/dashboard/fixtures/replay.json`, so it
+cannot fail for any of the reasons the live path can (model download, JIT
+compile stall, slow CPU). This is the fallback for a live demo failure, not
+a separate feature.
+
+### Stress test
+
+```bash
+python scripts/stress_test.py
+```
+
+Runs pathological inputs across all four toggle combos and writes
+`benchmarks/stress_test_results.json`. Findings are documented, not fixed
+— see Break points below.
+
 ## Limitations (Phase 1 + 2 + 3 + 4a + 4b)
 
 - CPU only, batch size 1 (enforced by an assertion in `generate_with_timing`) — no GPU path, no batching.
@@ -241,6 +289,43 @@ streaming, a continuous prompt-overlap slider, automated dashboard tests).
 - Benchmark numbers are from one dev machine; re-run `scripts/run_baseline.py` locally before trusting exact figures on different hardware.
 - `max_new_tokens=0` isn't validated — the loop still emits one token in that case.
 - Only tested against Python 3.14.
+
+## Break points / Q&A
+
+Two break points are already documented above with numbers; the rest come
+from `scripts/stress_test.py` running pathological inputs across all four
+toggle combos and recording what actually happens
+(`benchmarks/stress_test_results.json`, 26 runs, this repo's dev machine).
+
+- **Quantization**: the BFP kernel costs prefill throughput far more than
+  decode — compute-bound prefill retains only 16-44% of fp32 speed, while
+  memory-bandwidth-bound decode retains 83-85% — see the BFP numbers above.
+- **Caching**: prefix-only — the final prompt token is always a fresh
+  forward pass, capping hit rate at `(N-1)/N` — and costs ~9% throughput on
+  a no-reuse workload — see the KV-cache numbers above.
+- **Empty prompts** (`empty_prompt`, 0 tokens): fails identically on all 4
+  combos — `RuntimeError: cannot reshape tensor of 0 elements into shape
+  [-1, 0] because the unspecified dimension size -1 can be any value and is
+  ambiguous`.
+- **Whitespace-only prompts** (`whitespace_prompt`, 3 tokens after
+  tokenization): succeeds on all 4 combos (~0.26-0.28s for 10 requested
+  tokens) — whitespace is not rejected as empty.
+- **Prompts at/past GPT-2's 1024-token context limit** (`at_context_prompt`
+  = 1024 tokens exactly, `over_context_prompt` = 1100 tokens): both fail on
+  all 4 combos with the same `IndexError: index out of range in self`, but
+  not at the same cost — the 1100-token case fails near-instantly
+  (~0.003-0.004s, every combo), while the 1024-token case only fails after
+  a full prefill's worth of compute, and that prefill is markedly more
+  expensive under BFP (~4.1-4.4s) than fp32 (~0.9-0.93s).
+- **`max_new_tokens=0`** (`zero_max_new_tokens`): succeeds on all 4 combos
+  (~0.03-0.09s) — consistent with the Limitations note above that this
+  input isn't validated.
+- **`max_new_tokens=200`** (`large_max_new_tokens`): succeeds on all 4
+  combos (~5.8-7.1s).
+- **Cache-eviction pressure** (`cache_eviction_pressure`, only meaningful
+  on the two cache-on combos): succeeds on both — `fp32_cache` in ~3.2s,
+  `bfp_cache` in ~8.6s. Eviction under pressure doesn't crash; it's just
+  slower under BFP, consistent with the quantization break point above.
 
 ## Docs
 
