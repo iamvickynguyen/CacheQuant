@@ -185,9 +185,9 @@ lookup/insert cost the way a naive `GenerationTiming`-only timer would. The
 BFP and fp32 caches are kept separate (BFP quantization changes what K/V
 values get cached, so one cache can't correctly serve both). Prefill and
 decode throughput are shown as separate metrics rather than as one aggregate
-number, since that split is what makes Phase 2's BFP break point (helps
-FLOP-bound prefill, hurts matrix-vector decode) visible during a live demo
-instead of averaged away.
+number, since that split is what makes Phase 2's BFP break point (hurts
+compute-bound prefill far more than it hurts memory-bandwidth-bound
+matrix-vector decode) visible during a live demo instead of averaged away.
 
 This is demo software for a live presentation, not a tested/production
 surface — see `docs/superpowers/specs/2026-08-14-phase4b-dashboard-design.md`
