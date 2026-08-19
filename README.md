@@ -24,7 +24,7 @@ output-feature axis (which also puts both paths on the same thread count for the
 first time), the per-block scale is hoisted out of the inner loop, and the bias
 is fused into the kernel's output store to avoid a torch op whose OpenMP threads
 were contending with Numba's. That moved the short-prompt profile from ~38x more
-expensive than fp32 to ~1.2x, and reversed the direction of the documented break
+expensive than fp32 to ~1.07x, and reversed the direction of the documented break
 point — see below.
 
 Phase 3 adds cross-request KV-cache prefix reuse (`cachequant/kvcache/`): a
@@ -74,9 +74,9 @@ Runs GPT-2 on CPU on two prompt profiles — a short decode-heavy prompt and a l
 
 Latest recorded numbers (short prompt, 50 generated tokens; measured on this repo's dev machine — see the `provenance` field in the JSON for the actual CPU, priced at the documented AWS `c7i.2xlarge` on-demand rate in `cachequant/bench/config.py`, not run on that instance):
 
-- Prefill: ~216 tokens/sec
-- Decode: ~41 tokens/sec
-- Cost: ~$0.0024 / 1K generated tokens
+- Prefill: ~204 tokens/sec
+- Decode: ~38 tokens/sec
+- Cost: ~$0.0026 / 1K generated tokens
 
 ### Quantized kernel (BFP)
 
@@ -99,14 +99,14 @@ after the kernel optimization pass:
 
 | | prefill tok/s | decode tok/s | cost / 1K tokens |
 |---|---:|---:|---:|
-| short prompt, fp32 baseline | 216.2 | 40.8 | $0.00245 |
-| short prompt, BFP | 94.7 (43.8%) | 34.6 (84.9%) | $0.00295 (1.21x) |
-| long prompt, fp32 baseline | 1203.4 | 36.3 | $0.00469 |
-| long prompt, BFP | 188.0 (15.6%) | 30.0 (82.7%) | $0.01721 (3.67x) |
+| short prompt, fp32 baseline | 204.2 | 38.2 | $0.00262 |
+| short prompt, BFP | 91.2 (44.7%) | 37.1 (97.3%) | $0.00280 (1.07x) |
+| long prompt, fp32 baseline | 1187.5 | 35.0 | $0.00479 |
+| long prompt, BFP | 185.2 (15.6%) | 29.4 (83.8%) | $0.01750 (3.65x) |
 
 **Documented break point** — and it runs opposite to the design spec's
-prediction. Decode retains 83-85% of fp32 throughput while prefill retains only
-16-44%, because the two phases are limited by different resources: decode (M=1)
+prediction. Decode retains 84-97% of fp32 throughput while prefill retains only
+16-45%, because the two phases are limited by different resources: decode (M=1)
 is memory-bandwidth-bound, where reading int8 mantissas instead of fp32 weights
 is roughly a 4x reduction in bytes moved, and that nearly offsets the kernel's
 arithmetic disadvantage. Prefill (M=long) reuses each weight across every token,
@@ -154,17 +154,17 @@ Latest recorded numbers (median of 5 reps, `total_honest_prefill_seconds`
 summed across each 5-prompt set — includes `cache.lookup()`/`cache.insert()`
 overhead for the cache-on combos, not just the internal forward-pass timing;
 see Limitations below) show caching does not rescue BFP's prefill slowdown:
-`bfp_cache` never beats `fp32_cache`, losing by 2.44x on `high_reuse` (0.472s
-vs 0.194s), 3.84x on `long_high_reuse` (1.696s vs 0.442s), and 2.07x on
-`no_reuse` (0.383s vs 0.185s), even though hit rates are identical between
+`bfp_cache` never beats `fp32_cache`, losing by 2.58x on `high_reuse` (0.543s
+vs 0.210s), 4.02x on `long_high_reuse` (1.984s vs 0.494s), and 2.42x on
+`no_reuse` (0.465s vs 0.192s), even though hit rates are identical between
 the two (0.565 / 0.777 / 0.022) — confirming cache behavior is
 quantization-independent. But `fp32_cache` is not the fastest combination
 overall in every scenario: it only beats the uncached `fp32_no_cache`
 baseline on `long_high_reuse`, where there's real prefix overlap to exploit
-(0.442s vs 1.074s, a 2.43x win). On `high_reuse` and `no_reuse`, the honest
+(0.494s vs 1.100s, a 2.23x win). On `high_reuse` and `no_reuse`, the honest
 lookup/insert overhead outweighs what little prefill it saves, so plain
-`fp32_no_cache` is actually fastest overall (0.186s vs 0.194s on
-`high_reuse`; 0.161s vs 0.185s on `no_reuse`) — consistent with the ~9%
+`fp32_no_cache` is actually fastest overall (0.206s vs 0.210s on
+`high_reuse`; 0.173s vs 0.192s on `no_reuse`) — consistent with the ~9%
 no-reuse cache tax documented in Limitations below. BFP's kernel-quality gap
 (documented above) is larger than what a cache hit can claw back regardless.
 
@@ -226,7 +226,11 @@ streamlit run cachequant/dashboard/app.py --server.address 127.0.0.1
 ```
 
 Toggle **Replay (offline)** in the sidebar before clicking Generate. This
-path never loads a model or calls the real pipeline — it streams
+path never loads a model or calls the real pipeline — though opening the
+dashboard still triggers one live model load on the very first page render,
+before you can touch the toggle (Streamlit widgets start at their declared
+default on the first run), and flipping it only skips model loading and live
+compute from that point forward. It streams
 pre-captured runs from `cachequant/dashboard/fixtures/replay.json`, so it
 cannot fail for any of the reasons the live path can (model download, JIT
 compile stall, slow CPU). This is the fallback for a live demo failure, not
@@ -242,7 +246,7 @@ Runs pathological inputs across all four toggle combos and writes
 `benchmarks/stress_test_results.json`. Findings are documented, not fixed
 — see Break points below.
 
-## Limitations (Phase 1 + 2 + 3 + 4a + 4b)
+## Limitations (Phase 1 + 2 + 3 + 4a + 4b + 5)
 
 - CPU only, batch size 1 (enforced by an assertion in `generate_with_timing`) — no GPU path, no batching.
 - The BFP kernel is inference-only (no autograd/backward pass) and requires the
@@ -255,7 +259,7 @@ Runs pathological inputs across all four toggle combos and writes
   so it is CPU-only by design and does not follow `.to(device)`. Consistent with
   the project's no-GPU-path non-goal, but it is not a general-purpose module.
 - BFP decode throughput is noticeably more sensitive to scheduling noise than the
-  fp32 baseline (31.3-40.0 vs 40.7-40.9 tok/s across 5 reps); N=5 is thin for a
+  fp32 baseline (33.2-39.7 vs 37.3-39.3 tok/s across 5 reps); N=5 is thin for a
   spread that wide.
 - The prefix cache's eviction scan (`PrefixKVCache._lru_leaf`) walks the
   entire trie on every evicted node — an O(n) scan acceptable at this
@@ -298,8 +302,8 @@ toggle combos and recording what actually happens
 (`benchmarks/stress_test_results.json`, 26 runs, this repo's dev machine).
 
 - **Quantization**: the BFP kernel costs prefill throughput far more than
-  decode — compute-bound prefill retains only 16-44% of fp32 speed, while
-  memory-bandwidth-bound decode retains 83-85% — see the BFP numbers above.
+  decode — compute-bound prefill retains only 16-45% of fp32 speed, while
+  memory-bandwidth-bound decode retains 84-97% — see the BFP numbers above.
 - **Caching**: prefix-only — the final prompt token is always a fresh
   forward pass, capping hit rate at `(N-1)/N` — and costs ~9% throughput on
   a no-reuse workload — see the KV-cache numbers above.
@@ -308,23 +312,23 @@ toggle combos and recording what actually happens
   [-1, 0] because the unspecified dimension size -1 can be any value and is
   ambiguous`.
 - **Whitespace-only prompts** (`whitespace_prompt`, 3 tokens after
-  tokenization): succeeds on all 4 combos (~0.26-0.28s for 10 requested
+  tokenization): succeeds on all 4 combos (~0.25-0.30s for 10 requested
   tokens) — whitespace is not rejected as empty.
 - **Prompts at/past GPT-2's 1024-token context limit** (`at_context_prompt`
   = 1024 tokens exactly, `over_context_prompt` = 1100 tokens): both fail on
   all 4 combos with the same `IndexError: index out of range in self`, but
   not at the same cost — the 1100-token case fails near-instantly
-  (~0.003-0.004s, every combo), while the 1024-token case only fails after
+  (~0.002-0.004s, every combo), while the 1024-token case only fails after
   a full prefill's worth of compute, and that prefill is markedly more
-  expensive under BFP (~4.1-4.4s) than fp32 (~0.9-0.93s).
+  expensive under BFP (~5.0s) than fp32 (~0.87-0.91s).
 - **`max_new_tokens=0`** (`zero_max_new_tokens`): succeeds on all 4 combos
-  (~0.03-0.09s) — consistent with the Limitations note above that this
+  (~0.03-0.06s) — consistent with the Limitations note above that this
   input isn't validated.
 - **`max_new_tokens=200`** (`large_max_new_tokens`): succeeds on all 4
-  combos (~5.8-7.1s).
+  combos (~5.3-5.6s).
 - **Cache-eviction pressure** (`cache_eviction_pressure`, only meaningful
-  on the two cache-on combos): succeeds on both — `fp32_cache` in ~3.2s,
-  `bfp_cache` in ~8.6s. Eviction under pressure doesn't crash; it's just
+  on the two cache-on combos): succeeds on both — `fp32_cache` in ~3.0s,
+  `bfp_cache` in ~8.4s. Eviction under pressure doesn't crash; it's just
   slower under BFP, consistent with the quantization break point above.
 
 ## Docs

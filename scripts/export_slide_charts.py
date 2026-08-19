@@ -55,7 +55,7 @@ def _chart_bfp_breakpoint() -> None:
         ax.set_xticklabels(["prefill tok/s", "decode tok/s"])
         ax.set_title(label)
         ax.legend()
-    fig.suptitle("BFP break point: helps prefill, costs less at decode")
+    fig.suptitle("BFP break point: costs prefill throughput, near-free at decode")
     fig.tight_layout()
     fig.savefig(CHARTS_DIR / "bfp_breakpoint.png", dpi=150)
     plt.close(fig)

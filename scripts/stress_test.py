@@ -3,6 +3,7 @@ import json
 import time
 from pathlib import Path
 
+import numba
 import torch
 
 from cachequant.bench.config import DEFAULT_CONFIG
@@ -56,7 +57,14 @@ def _run_case(model, tokenizer, prompt: str, max_new_tokens: int, cache) -> tupl
 
 
 def main() -> None:
+    # Pin both thread pools before any timed run. torch and numba have
+    # independent thread pools; without this BFP's numba matmul runs on every
+    # logical core while fp32's torch path stays at cpu_threads, making the
+    # recorded BFP-vs-fp32 wall times not apples-to-apples. Same convention as
+    # scripts/run_bfp_benchmark.py's main() and the dashboard's model loader.
     torch.set_num_threads(DEFAULT_CONFIG.cpu_threads)
+    numba.set_num_threads(DEFAULT_CONFIG.cpu_threads)
+
     fp32_model, tokenizer = load_model()
     bfp_model = apply_bfp_quantization(copy.deepcopy(fp32_model))
     generate(fp32_model, tokenizer, WARMUP_PROMPT, cache=None, max_new_tokens=WARMUP_MAX_NEW_TOKENS)

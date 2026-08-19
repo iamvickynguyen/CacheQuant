@@ -3,10 +3,12 @@ import json
 import time
 from pathlib import Path
 
+import numba
 import torch
 
 from cachequant.bench.config import DEFAULT_CONFIG
 from cachequant.bench.harness import compute_bench_result
+from cachequant.bench.provenance import provenance
 from cachequant.dashboard.app import _cost_per_1k, _prefill_tokens_per_sec
 from cachequant.kernel.bfp_linear import apply_bfp_quantization
 from cachequant.kvcache.trie_cache import PrefixKVCache
@@ -57,7 +59,14 @@ def _generated_only(text: str, prompt: str, tokenizer) -> str:
 
 
 def main() -> None:
+    # Pin both thread pools before any timed run. torch and numba have
+    # independent thread pools; without this BFP's numba matmul runs on every
+    # logical core while fp32's torch path stays at cpu_threads, making the
+    # captured BFP-vs-fp32 numbers not apples-to-apples. Same convention as
+    # scripts/run_bfp_benchmark.py's main() and the dashboard's model loader.
     torch.set_num_threads(DEFAULT_CONFIG.cpu_threads)
+    numba.set_num_threads(DEFAULT_CONFIG.cpu_threads)
+
     fp32_model, tokenizer = load_model()
     bfp_model = apply_bfp_quantization(copy.deepcopy(fp32_model))
     generate(fp32_model, tokenizer, WARMUP_PROMPT, cache=None, max_new_tokens=WARMUP_MAX_NEW_TOKENS)
@@ -74,6 +83,14 @@ def main() -> None:
     for prompt_set_name, prompt in PROMPT_SETS.items():
         for combo_key, model, use_cache in combos:
             cache = PrefixKVCache(max_tokens=DEFAULT_CONFIG.max_cache_tokens) if use_cache else None
+            if use_cache:
+                # Warm the cache with a discarded first call against the SAME
+                # cache instance, then capture the second. A single call always
+                # reports a 0% hit rate (nothing was inserted before it), which
+                # would show the project's headline KV-cache result as pure
+                # overhead in offline replay. The captured second call is what a
+                # real second click in the live dashboard does.
+                generate(model, tokenizer, prompt, cache=cache, max_new_tokens=MAX_NEW_TOKENS)
             t0 = time.perf_counter()
             text, timing, stats = generate(model, tokenizer, prompt, cache=cache, max_new_tokens=MAX_NEW_TOKENS)
             wall_seconds = time.perf_counter() - t0
@@ -102,7 +119,7 @@ def main() -> None:
 
     FIXTURES_DIR.mkdir(parents=True, exist_ok=True)
     output_path = FIXTURES_DIR / "replay.json"
-    output_path.write_text(json.dumps({"entries": entries}, indent=2))
+    output_path.write_text(json.dumps({"provenance": provenance(), "entries": entries}, indent=2))
     print(f"wrote {output_path}")
 
 
