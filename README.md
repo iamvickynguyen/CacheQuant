@@ -78,7 +78,58 @@ Latest recorded numbers (short prompt, 50 generated tokens; measured on this rep
 - Decode: ~38 tokens/sec
 - Cost: ~$0.0026 / 1K generated tokens
 
+```bash
+python scripts/plot_baseline.py
+```
+
+Reads the existing `benchmarks/baseline_results*.json` (no re-run) and writes
+`benchmarks/charts/baseline_throughput.png` (prefill/decode tok/s) and
+`baseline_latency.png` (p50/p90/mean decode latency).
+
 ### Quantized kernel (BFP)
+
+"Kernel" here means a low-level numeric compute routine (matmul loop),
+unrelated to the OS kernel — `cachequant/kernel/bfp_numba.py` is a
+`@njit`-compiled int8 matmul inner loop.
+
+BFP (Block Floating Point) groups weight values into blocks of 32
+(`DEFAULT_BLOCK_SIZE` in `cachequant/kernel/bfp.py`), replaces each value's
+individual fp32 exponent with **one shared power-of-two exponent per block**
+(sized to the block's max value), and stores each value as an int8 mantissa
+relative to that shared scale:
+
+```
+fp32 (each number = own float, 32 bits):
+  1.5   -0.7    0.2   -1.9
+[S|E|MMM] [S|E|MMM] [S|E|MMM] [S|E|MMM]   <- 4 independent exponents
+
+                    |
+                    | pick block, find max_abs = 1.9
+                    | exponent = ceil(log2(1.9)) = 1  ->  scale = 2^1 = 2
+                    v
+
+BFP block (1 shared exponent + int8 mantissas):
+  shared exponent: 1   (scale = 2)
+
+  value    mantissa = round(value / scale * 127)
+  1.5   ->  round(1.5/2*127)  =  95
+ -0.7   ->  round(-0.7/2*127) = -44
+  0.2   ->  round(0.2/2*127)  =  13
+ -1.9   ->  round(-1.9/2*127) = -121
+
+dequantize:  value ≈ mantissa * scale / 127
+  95  * 2/127 =  1.496   (vs original 1.5)
+ -44  * 2/127 = -0.693   (vs original -0.7)
+  13  * 2/127 =  0.205   (vs original 0.2)
+-121  * 2/127 = -1.906   (vs original -1.9)
+```
+
+Fewer bytes moved from RAM per value (~1 shared-exponent bit + 8 mantissa bits
+vs 32 full fp32 bits) is what makes decode faster — decode is
+memory-bandwidth-bound. The precision loss above (1.5 -> 1.496) is the
+quality cost measured below, and the custom loop needed to do this math (vs
+hardware's native fp32 matmul path) is why prefill is *slower*, not faster —
+see the break point below.
 
 ```bash
 pytest tests/test_bfp.py tests/test_bfp_numba.py tests/test_bfp_linear.py -v   # validation, no network
@@ -119,6 +170,54 @@ overhead making up the rest.
 See `docs/superpowers/specs/2026-08-07-cachequant-design.md` for both prompt
 profiles in full, the four optimizations and what each was worth, the per-stage
 attribution table, and the pre-optimization numbers kept for comparison.
+
+### fp16 reference point
+
+```bash
+python scripts/run_fp16_benchmark.py   # writes benchmarks/fp16_results*.json
+```
+
+fp16 is **not one of this project's optimizations** — no kernel is written for
+it. It is a second *baseline* alongside fp32: the free, one-line alternative
+(`model.half()`) any real deployment reaches for before writing a custom
+quantized kernel. It is here to answer "why not just use fp16?" with a
+measurement, and to separate the two effects that are otherwise confounded in
+the BFP decode result — fewer bytes moved per weight vs. arithmetic this CPU
+can execute natively.
+
+Latest recorded numbers (median of 5 reps; percentages against the fp32 rows of
+the same JSON files, re-measured in the same session as the fp16 run, hence
+slightly above the Phase 1 table above — run-to-run variance of a few percent,
+immaterial at this effect size):
+
+| | prefill tok/s | decode tok/s | cost / 1K tokens |
+|---|---:|---:|---:|
+| short prompt, fp32 | 212.5 | 41.0 | $0.00244 |
+| short prompt, fp16 | 7.4 (3.5%) | 7.0 (17.0%) | $0.01602 (6.57x) |
+| long prompt, fp32 | 1222.6 | 37.4 | $0.00458 |
+| long prompt, fp16 | 8.7 (0.7%) | 5.8 (15.6%) | $0.32260 (70.5x) |
+
+Greedy generation was **token-identical to fp32** on the short prompt, so this
+is a pure speed result — fp16 costs no measurable quality here, and loses
+anyway.
+
+**Second documented break point, and it settles the BFP question.** fp16 moves
+half the bytes of fp32 per weight (2 vs 4). If "fewer bytes moved" were
+sufficient to win the memory-bandwidth-bound decode phase, fp16 should have
+*beaten* fp32 at decode. It is 5.9-6.4x slower instead, and 29-140x slower at
+prefill, because this project's pinned CPU (Intel i7-8700K, Coffee Lake, no
+AVX-512 and no native fp16 compute path — see `provenance` in the JSON) has no
+hardware that multiplies fp16 directly. Every op unpacks to fp32, does the
+math, and repacks, and that overhead dwarfs the bandwidth saving.
+
+That makes the BFP decode result sharper than it first reads. BFP retains
+78-91% of fp32 decode throughput not merely because int8 mantissas are smaller,
+but because int8 multiply-accumulate is an operation this CPU executes
+natively — so the bandwidth saving is actually collectable. Lower precision on
+its own buys nothing; lower precision *the hardware can compute in* is what
+buys something. The same reasoning is why fp8 is a dead end on this machine and
+why both formats behave differently on GPUs with dedicated fp16/fp8 tensor
+cores.
 
 ### KV-cache prefix reuse
 
