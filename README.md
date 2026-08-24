@@ -219,6 +219,31 @@ buys something. The same reasoning is why fp8 is a dead end on this machine and
 why both formats behave differently on GPUs with dedicated fp16/fp8 tensor
 cores.
 
+**Why not fp16 / bfp16 / fp8 on this machine:**
+
+`/proc/cpuinfo` on the pinned i7-8700K shows `f16c` (fp16↔fp32 *conversion*
+only) and `avx2`, but no `avx512` and no native fp16 or fp8 arithmetic unit.
+AVX2 *does* have a native int16 multiply-accumulate (`VPMADDWD`), so the
+three formats are ruled out for two different reasons, not one:
+
+- **fp16** — no native float16 ALU. Every op pays the unpack/compute/repack
+  tax measured above; that's a hardware wall.
+- **fp8** — no native fp8 ALU on *any* CPU. fp8 tensor cores are GPU-only
+  (e.g. Hopper, Blackwell); not implementable here at all. Also a hardware
+  wall.
+- **bfp16** (16-bit-mantissa BFP, an int mantissa — not to be confused with
+  `bf16`/bfloat16, an IEEE-style float format) — this one is *not*
+  hardware-blocked, since int16 MAC is native. It's a diminishing-returns
+  problem instead: 16 mantissa bits + shared exponent works out to ~16.25
+  bits/value, only ~1.97x smaller than fp32 — roughly fp16's compression
+  ratio, which already lost on this memory-bandwidth-bound workload. int8's
+  8.25 bits/value (3.88x smaller) is the sweet spot: half the mantissa
+  width, still native hardware, and no precision need this project has
+  documented that would justify going wider.
+
+int8 is what BFP targets here because it's both natively executable *and*
+gives the largest bandwidth win of the options that are.
+
 ### KV-cache prefix reuse
 
 ```bash
