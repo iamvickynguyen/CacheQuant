@@ -248,6 +248,10 @@ def main() -> None:
     )
     print(f"wrote {output_path}")
 
+    import plot_kvcache
+
+    plot_kvcache.main()
+
 
 if __name__ == "__main__":
     main()
