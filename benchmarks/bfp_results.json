@@ -20,91 +20,91 @@
   },
   "runs": [
     {
-      "prefill_tokens_per_sec": 74.40227312921236,
-      "decode_tokens_per_sec": 37.129857752266034,
-      "mean_latency_ms": 26.93250285719099,
-      "p50_latency_ms": 26.264064000315557,
-      "p90_latency_ms": 31.817914000384917,
-      "wall_seconds": 1.4137757870030327,
-      "cost_per_1k_tokens": 0.0028039886442226816,
+      "prefill_tokens_per_sec": 105.62308164859103,
+      "decode_tokens_per_sec": 42.65230013778496,
+      "mean_latency_ms": 23.44539442819208,
+      "p50_latency_ms": 23.3106929990754,
+      "p90_latency_ms": 23.976925996976206,
+      "wall_seconds": 1.2150977199817135,
+      "cost_per_1k_tokens": 0.002409943811297065,
       "generated_tokens": 50
     },
     {
-      "prefill_tokens_per_sec": 91.24137778763102,
-      "decode_tokens_per_sec": 35.5179818412563,
-      "mean_latency_ms": 28.154752836729,
-      "p50_latency_ms": 26.64127199932409,
-      "p90_latency_ms": 32.56451200013544,
-      "wall_seconds": 1.4563024669996594,
-      "cost_per_1k_tokens": 0.0028883332262159907,
+      "prefill_tokens_per_sec": 106.79902910779698,
+      "decode_tokens_per_sec": 42.685108677602095,
+      "mean_latency_ms": 23.42737387768967,
+      "p50_latency_ms": 23.325808000663528,
+      "p90_latency_ms": 23.690695001278073,
+      "wall_seconds": 1.2134849870089965,
+      "cost_per_1k_tokens": 0.0024067452242345095,
       "generated_tokens": 50
     },
     {
-      "prefill_tokens_per_sec": 101.34235183754312,
-      "decode_tokens_per_sec": 33.16798690239707,
-      "mean_latency_ms": 30.149553632624276,
-      "p50_latency_ms": 30.67209999971965,
-      "p90_latency_ms": 33.134993000203394,
-      "wall_seconds": 1.5464009279985476,
-      "cost_per_1k_tokens": 0.0030670285071971192,
+      "prefill_tokens_per_sec": 104.72915103814874,
+      "decode_tokens_per_sec": 41.964134824044336,
+      "mean_latency_ms": 23.82987291869596,
+      "p50_latency_ms": 23.287045001779916,
+      "p90_latency_ms": 24.43185200172593,
+      "wall_seconds": 1.234502852017613,
+      "cost_per_1k_tokens": 0.002448430656501599,
       "generated_tokens": 50
     },
     {
-      "prefill_tokens_per_sec": 87.35455466638093,
-      "decode_tokens_per_sec": 39.65598854026435,
-      "mean_latency_ms": 25.21687232647495,
-      "p50_latency_ms": 24.583677999544307,
-      "p90_latency_ms": 26.478519000193046,
-      "wall_seconds": 1.3157599439973637,
-      "cost_per_1k_tokens": 0.0026095905555947713,
+      "prefill_tokens_per_sec": 107.39400020080424,
+      "decode_tokens_per_sec": 42.77226325881178,
+      "mean_latency_ms": 23.37963726513779,
+      "p50_latency_ms": 23.27617300034035,
+      "p90_latency_ms": 23.79020299849799,
+      "wall_seconds": 1.2107827759937209,
+      "cost_per_1k_tokens": 0.002401385839054213,
       "generated_tokens": 50
     },
     {
-      "prefill_tokens_per_sec": 100.98667297673344,
-      "decode_tokens_per_sec": 39.25918214929186,
-      "mean_latency_ms": 25.471748142823643,
-      "p50_latency_ms": 25.098844999774883,
-      "p90_latency_ms": 26.823042999239988,
-      "wall_seconds": 1.3174317359980705,
-      "cost_per_1k_tokens": 0.002612906276396173,
+      "prefill_tokens_per_sec": 107.1887300878067,
+      "decode_tokens_per_sec": 42.384293081036716,
+      "mean_latency_ms": 23.593645836868113,
+      "p50_latency_ms": 23.47050699972897,
+      "p90_latency_ms": 24.1839650007023,
+      "wall_seconds": 1.221394019008585,
+      "cost_per_1k_tokens": 0.0024224314710336935,
       "generated_tokens": 50
     }
   ],
   "summary": {
     "prefill_tokens_per_sec": {
-      "median": 91.24137778763102,
-      "min": 74.40227312921236,
-      "max": 101.34235183754312
+      "median": 106.79902910779698,
+      "min": 104.72915103814874,
+      "max": 107.39400020080424
     },
     "decode_tokens_per_sec": {
-      "median": 37.129857752266034,
-      "min": 33.16798690239707,
-      "max": 39.65598854026435
+      "median": 42.65230013778496,
+      "min": 41.964134824044336,
+      "max": 42.77226325881178
     },
     "mean_latency_ms": {
-      "median": 26.93250285719099,
-      "min": 25.21687232647495,
-      "max": 30.149553632624276
+      "median": 23.44539442819208,
+      "min": 23.37963726513779,
+      "max": 23.82987291869596
     },
     "p50_latency_ms": {
-      "median": 26.264064000315557,
-      "min": 24.583677999544307,
-      "max": 30.67209999971965
+      "median": 23.3106929990754,
+      "min": 23.27617300034035,
+      "max": 23.47050699972897
     },
     "p90_latency_ms": {
-      "median": 31.817914000384917,
-      "min": 26.478519000193046,
-      "max": 33.134993000203394
+      "median": 23.976925996976206,
+      "min": 23.690695001278073,
+      "max": 24.43185200172593
     },
     "wall_seconds": {
-      "median": 1.4137757870030327,
-      "min": 1.3157599439973637,
-      "max": 1.5464009279985476
+      "median": 1.2150977199817135,
+      "min": 1.2107827759937209,
+      "max": 1.234502852017613
     },
     "cost_per_1k_tokens": {
-      "median": 0.0028039886442226816,
-      "min": 0.0026095905555947713,
-      "max": 0.0030670285071971192
+      "median": 0.002409943811297065,
+      "min": 0.002401385839054213,
+      "max": 0.002448430656501599
     },
     "generated_tokens": {
       "median": 50,

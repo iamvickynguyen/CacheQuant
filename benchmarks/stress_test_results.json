@@ -14,7 +14,7 @@
       "prompt_tokens": 0,
       "max_new_tokens": 10,
       "outcome": "RuntimeError: cannot reshape tensor of 0 elements into shape [-1, 0] because the unspecified dimension size -1 can be any value and is ambiguous",
-      "wall_seconds": 0.0009061269993253518
+      "wall_seconds": 0.018532228001276962
     },
     {
       "case": "empty_prompt",
@@ -22,7 +22,7 @@
       "prompt_tokens": 0,
       "max_new_tokens": 10,
       "outcome": "RuntimeError: cannot reshape tensor of 0 elements into shape [-1, 0] because the unspecified dimension size -1 can be any value and is ambiguous",
-      "wall_seconds": 0.0006358509999699891
+      "wall_seconds": 0.0008579050008847844
     },
     {
       "case": "empty_prompt",
@@ -30,7 +30,7 @@
       "prompt_tokens": 0,
       "max_new_tokens": 10,
       "outcome": "RuntimeError: cannot reshape tensor of 0 elements into shape [-1, 0] because the unspecified dimension size -1 can be any value and is ambiguous",
-      "wall_seconds": 0.0006471409997175215
+      "wall_seconds": 0.0006670910006505437
     },
     {
       "case": "empty_prompt",
@@ -38,7 +38,23 @@
       "prompt_tokens": 0,
       "max_new_tokens": 10,
       "outcome": "RuntimeError: cannot reshape tensor of 0 elements into shape [-1, 0] because the unspecified dimension size -1 can be any value and is ambiguous",
-      "wall_seconds": 0.0006024590002198238
+      "wall_seconds": 0.000583992001338629
+    },
+    {
+      "case": "empty_prompt",
+      "combo": "int8_no_cache",
+      "prompt_tokens": 0,
+      "max_new_tokens": 10,
+      "outcome": "RuntimeError: cannot reshape tensor of 0 elements into shape [-1, 0] because the unspecified dimension size -1 can be any value and is ambiguous",
+      "wall_seconds": 0.0006344239991449285
+    },
+    {
+      "case": "empty_prompt",
+      "combo": "int8_cache",
+      "prompt_tokens": 0,
+      "max_new_tokens": 10,
+      "outcome": "RuntimeError: cannot reshape tensor of 0 elements into shape [-1, 0] because the unspecified dimension size -1 can be any value and is ambiguous",
+      "wall_seconds": 0.0005795009965368081
     },
     {
       "case": "whitespace_prompt",
@@ -46,7 +62,7 @@
       "prompt_tokens": 3,
       "max_new_tokens": 10,
       "outcome": "success",
-      "wall_seconds": 0.25957959100014705
+      "wall_seconds": 0.24950153900135774
     },
     {
       "case": "whitespace_prompt",
@@ -54,7 +70,7 @@
       "prompt_tokens": 3,
       "max_new_tokens": 10,
       "outcome": "success",
-      "wall_seconds": 0.2598318139989715
+      "wall_seconds": 0.2504279309978301
     },
     {
       "case": "whitespace_prompt",
@@ -62,7 +78,7 @@
       "prompt_tokens": 3,
       "max_new_tokens": 10,
       "outcome": "success",
-      "wall_seconds": 0.25170402599906083
+      "wall_seconds": 0.25530185400202754
     },
     {
       "case": "whitespace_prompt",
@@ -70,7 +86,23 @@
       "prompt_tokens": 3,
       "max_new_tokens": 10,
       "outcome": "success",
-      "wall_seconds": 0.2995153090014355
+      "wall_seconds": 0.2501244749983016
+    },
+    {
+      "case": "whitespace_prompt",
+      "combo": "int8_no_cache",
+      "prompt_tokens": 3,
+      "max_new_tokens": 10,
+      "outcome": "success",
+      "wall_seconds": 0.20532549699782976
+    },
+    {
+      "case": "whitespace_prompt",
+      "combo": "int8_cache",
+      "prompt_tokens": 3,
+      "max_new_tokens": 10,
+      "outcome": "success",
+      "wall_seconds": 0.20693508100157487
     },
     {
       "case": "over_context_prompt",
@@ -78,7 +110,7 @@
       "prompt_tokens": 1100,
       "max_new_tokens": 5,
       "outcome": "IndexError: index out of range in self",
-      "wall_seconds": 0.003525164998791297
+      "wall_seconds": 0.00409611400027643
     },
     {
       "case": "over_context_prompt",
@@ -86,7 +118,7 @@
       "prompt_tokens": 1100,
       "max_new_tokens": 5,
       "outcome": "IndexError: index out of range in self",
-      "wall_seconds": 0.0031946990002325037
+      "wall_seconds": 0.003249498000513995
     },
     {
       "case": "over_context_prompt",
@@ -94,7 +126,7 @@
       "prompt_tokens": 1100,
       "max_new_tokens": 5,
       "outcome": "IndexError: index out of range in self",
-      "wall_seconds": 0.0031951119999575894
+      "wall_seconds": 0.003737099003046751
     },
     {
       "case": "over_context_prompt",
@@ -102,7 +134,23 @@
       "prompt_tokens": 1100,
       "max_new_tokens": 5,
       "outcome": "IndexError: index out of range in self",
-      "wall_seconds": 0.0025477910003246507
+      "wall_seconds": 0.00295768800060614
+    },
+    {
+      "case": "over_context_prompt",
+      "combo": "int8_no_cache",
+      "prompt_tokens": 1100,
+      "max_new_tokens": 5,
+      "outcome": "IndexError: index out of range in self",
+      "wall_seconds": 0.0036600280000129715
+    },
+    {
+      "case": "over_context_prompt",
+      "combo": "int8_cache",
+      "prompt_tokens": 1100,
+      "max_new_tokens": 5,
+      "outcome": "IndexError: index out of range in self",
+      "wall_seconds": 0.0029472510032064747
     },
     {
       "case": "at_context_prompt",
@@ -110,7 +158,7 @@
       "prompt_tokens": 1024,
       "max_new_tokens": 5,
       "outcome": "IndexError: index out of range in self",
-      "wall_seconds": 0.9091059990005306
+      "wall_seconds": 0.8511993319989415
     },
     {
       "case": "at_context_prompt",
@@ -118,7 +166,7 @@
       "prompt_tokens": 1024,
       "max_new_tokens": 5,
       "outcome": "IndexError: index out of range in self",
-      "wall_seconds": 0.8698024850000365
+      "wall_seconds": 0.8520405579984072
     },
     {
       "case": "at_context_prompt",
@@ -126,7 +174,7 @@
       "prompt_tokens": 1024,
       "max_new_tokens": 5,
       "outcome": "IndexError: index out of range in self",
-      "wall_seconds": 4.995732520001184
+      "wall_seconds": 4.865172416997666
     },
     {
       "case": "at_context_prompt",
@@ -134,7 +182,23 @@
       "prompt_tokens": 1024,
       "max_new_tokens": 5,
       "outcome": "IndexError: index out of range in self",
-      "wall_seconds": 5.021414669001388
+      "wall_seconds": 4.851173014001688
+    },
+    {
+      "case": "at_context_prompt",
+      "combo": "int8_no_cache",
+      "prompt_tokens": 1024,
+      "max_new_tokens": 5,
+      "outcome": "IndexError: index out of range in self",
+      "wall_seconds": 3.505786294997961
+    },
+    {
+      "case": "at_context_prompt",
+      "combo": "int8_cache",
+      "prompt_tokens": 1024,
+      "max_new_tokens": 5,
+      "outcome": "IndexError: index out of range in self",
+      "wall_seconds": 3.5051801049994538
     },
     {
       "case": "zero_max_new_tokens",
@@ -142,7 +206,7 @@
       "prompt_tokens": 6,
       "max_new_tokens": 0,
       "outcome": "success",
-      "wall_seconds": 0.03319186800035823
+      "wall_seconds": 0.03181450099873473
     },
     {
       "case": "zero_max_new_tokens",
@@ -150,7 +214,7 @@
       "prompt_tokens": 6,
       "max_new_tokens": 0,
       "outcome": "success",
-      "wall_seconds": 0.03455224199933582
+      "wall_seconds": 0.03332263199990848
     },
     {
       "case": "zero_max_new_tokens",
@@ -158,7 +222,7 @@
       "prompt_tokens": 6,
       "max_new_tokens": 0,
       "outcome": "success",
-      "wall_seconds": 0.061202935999972397
+      "wall_seconds": 0.05889330699938
     },
     {
       "case": "zero_max_new_tokens",
@@ -166,7 +230,23 @@
       "prompt_tokens": 6,
       "max_new_tokens": 0,
       "outcome": "success",
-      "wall_seconds": 0.06154629800039402
+      "wall_seconds": 0.0601607150019845
+    },
+    {
+      "case": "zero_max_new_tokens",
+      "combo": "int8_no_cache",
+      "prompt_tokens": 6,
+      "max_new_tokens": 0,
+      "outcome": "success",
+      "wall_seconds": 0.041754100002435734
+    },
+    {
+      "case": "zero_max_new_tokens",
+      "combo": "int8_cache",
+      "prompt_tokens": 6,
+      "max_new_tokens": 0,
+      "outcome": "success",
+      "wall_seconds": 0.042607203002262395
     },
     {
       "case": "large_max_new_tokens",
@@ -174,7 +254,7 @@
       "prompt_tokens": 6,
       "max_new_tokens": 200,
       "outcome": "success",
-      "wall_seconds": 5.328319989999727
+      "wall_seconds": 5.058866947998467
     },
     {
       "case": "large_max_new_tokens",
@@ -182,7 +262,7 @@
       "prompt_tokens": 6,
       "max_new_tokens": 200,
       "outcome": "success",
-      "wall_seconds": 5.456677070998921
+      "wall_seconds": 5.072378165998089
     },
     {
       "case": "large_max_new_tokens",
@@ -190,7 +270,7 @@
       "prompt_tokens": 6,
       "max_new_tokens": 200,
       "outcome": "success",
-      "wall_seconds": 5.5168384540011175
+      "wall_seconds": 4.924505655999383
     },
     {
       "case": "large_max_new_tokens",
@@ -198,7 +278,23 @@
       "prompt_tokens": 6,
       "max_new_tokens": 200,
       "outcome": "success",
-      "wall_seconds": 5.552456490000623
+      "wall_seconds": 5.06336537000243
+    },
+    {
+      "case": "large_max_new_tokens",
+      "combo": "int8_no_cache",
+      "prompt_tokens": 6,
+      "max_new_tokens": 200,
+      "outcome": "success",
+      "wall_seconds": 4.410289389001264
+    },
+    {
+      "case": "large_max_new_tokens",
+      "combo": "int8_cache",
+      "prompt_tokens": 6,
+      "max_new_tokens": 200,
+      "outcome": "success",
+      "wall_seconds": 4.171537846003048
     },
     {
       "case": "cache_eviction_pressure",
@@ -206,7 +302,7 @@
       "prompt_tokens": null,
       "max_new_tokens": 5,
       "outcome": "success",
-      "wall_seconds": 3.0389187119999406
+      "wall_seconds": 2.955672289001086
     },
     {
       "case": "cache_eviction_pressure",
@@ -214,7 +310,15 @@
       "prompt_tokens": null,
       "max_new_tokens": 5,
       "outcome": "success",
-      "wall_seconds": 8.443450314000074
+      "wall_seconds": 8.12269927199668
+    },
+    {
+      "case": "cache_eviction_pressure",
+      "combo": "int8_cache",
+      "prompt_tokens": null,
+      "max_new_tokens": 5,
+      "outcome": "success",
+      "wall_seconds": 5.634927342001902
     }
   ]
 }

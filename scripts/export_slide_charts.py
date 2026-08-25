@@ -143,7 +143,13 @@ def _chart_quantization_breakpoints() -> None:
 
     Prefill and decode are plotted as separate panels rather than one aggregate,
     because averaging them is exactly what hides the break point — every scheme
-    here behaves differently in the two phases.
+    here behaves differently in the two phases, and two of them move in
+    *opposite* directions between the panels.
+
+    Note the y-axes are per-panel, not shared: prefill spans 1200 tok/s and
+    decode 50, so a shared axis would flatten every decode bar. That is a
+    deliberate tradeoff — bar heights are comparable within a panel and not
+    across panels, which is why every bar carries its value.
     """
     schemes = list(SCHEME_FILES)
     fig, axes = _figure(2, 2, figsize=(11, 7))
@@ -168,11 +174,49 @@ def _chart_quantization_breakpoints() -> None:
         _style(ax, title, ylabel)
 
     fig.suptitle(
-        "Quantization break points: decode survives low precision, prefill does not",
+        "Quantization break points: int8 kernels win decode and lose prefill; "
+        "fp16 loses both",
         color=INK,
         fontsize=13,
     )
     _save(fig, "quantization_breakpoints.png")
+
+
+def _chart_bfp_breakpoint() -> None:
+    """fp32 vs BFP8 alone, kept because it is the Phase 2 slide.
+
+    quantization_breakpoints.png supersedes it for the four-way comparison, but
+    this file is tracked and referenced as the BFP-specific figure; regenerating
+    it here is what stops it drifting into stale data every time the benchmarks
+    are re-run.
+    """
+    fig, axes = _figure(1, 2, figsize=(10, 4))
+    for ax, long_prompt, title in (
+        (axes[0], False, "short prompt"),
+        (axes[1], True, "long prompt"),
+    ):
+        metrics = ["prefill_tokens_per_sec", "decode_tokens_per_sec"]
+        width = 0.36
+        for i, scheme in enumerate(("fp32", "bfp8")):
+            values = [_median(scheme, long_prompt, m) for m in metrics]
+            bars = ax.bar(
+                [x + (i - 0.5) * width for x in range(len(metrics))],
+                values,
+                width * 0.94,
+                color=SCHEME_COLOR[scheme],
+                label=SCHEME_LABEL[scheme],
+            )
+            _label_bars(ax, bars, "{:.1f}")
+        ax.set_xticks(range(len(metrics)))
+        ax.set_xticklabels(["prefill tok/s", "decode tok/s"])
+        _style(ax, title, "tok/s")
+        ax.legend(frameon=False, fontsize=8, labelcolor=INK_MUTED)
+    fig.suptitle(
+        "BFP break point: costs prefill throughput, near-free at decode",
+        color=INK,
+        fontsize=12,
+    )
+    _save(fig, "bfp_breakpoint.png")
 
 
 def _chart_quality_vs_speed() -> None:
@@ -464,6 +508,7 @@ def main(run_benchmarks: bool = True) -> None:
         _run_benchmarks_fresh()
     CHARTS_DIR.mkdir(parents=True, exist_ok=True)
     _chart_quantization_breakpoints()
+    _chart_bfp_breakpoint()
     _chart_quality_vs_speed()
     _chart_granularity_scale_grid()
     _chart_kernel_scheme_comparison()

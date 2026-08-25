@@ -1,0 +1,116 @@
+{
+  "prompt": "The history of artificial intelligence began with",
+  "max_new_tokens": 50,
+  "n_reps": 5,
+  "config": {
+    "instance_type": "AWS c7i.2xlarge (8 vCPU, 16 GiB, us-east-1)",
+    "dollars_per_hour": 0.357,
+    "price_source": "https://instances.vantage.sh/aws/ec2/c7i.2xlarge (accessed 2026-08-07)",
+    "cpu_threads": 8,
+    "max_cache_tokens": 2048
+  },
+  "provenance": {
+    "platform_processor": "",
+    "cpu_model": "Intel(R) Core(TM) i7-8700K CPU @ 3.70GHz",
+    "platform_machine": "x86_64",
+    "cpu_count": 12,
+    "torch_version": "2.13.0+cu130",
+    "transformers_version": "5.14.1",
+    "numba_threads": 8
+  },
+  "runs": [
+    {
+      "prefill_tokens_per_sec": 159.83315610410224,
+      "decode_tokens_per_sec": 51.09137111874541,
+      "mean_latency_ms": 19.57277673515206,
+      "p50_latency_ms": 19.329245998960687,
+      "p90_latency_ms": 19.887215999915497,
+      "wall_seconds": 1.0028617290226975,
+      "cost_per_1k_tokens": 0.001989009095895017,
+      "generated_tokens": 50
+    },
+    {
+      "prefill_tokens_per_sec": 163.11135942847358,
+      "decode_tokens_per_sec": 51.187728824771476,
+      "mean_latency_ms": 19.535932204049384,
+      "p50_latency_ms": 19.30153499779408,
+      "p90_latency_ms": 20.213635001709918,
+      "wall_seconds": 1.0001761439998518,
+      "cost_per_1k_tokens": 0.001983682685599706,
+      "generated_tokens": 50
+    },
+    {
+      "prefill_tokens_per_sec": 158.92087819705733,
+      "decode_tokens_per_sec": 51.080215362846495,
+      "mean_latency_ms": 19.577051367080884,
+      "p50_latency_ms": 19.3012869967788,
+      "p90_latency_ms": 19.88850600173464,
+      "wall_seconds": 1.003322592987388,
+      "cost_per_1k_tokens": 0.001989923142758319,
+      "generated_tokens": 50
+    },
+    {
+      "prefill_tokens_per_sec": 165.07110508276634,
+      "decode_tokens_per_sec": 51.314241502581154,
+      "mean_latency_ms": 19.48776734719345,
+      "p50_latency_ms": 19.24035900083254,
+      "p90_latency_ms": 20.028766000905307,
+      "wall_seconds": 0.9973065680133004,
+      "cost_per_1k_tokens": 0.0019779913598930456,
+      "generated_tokens": 50
+    },
+    {
+      "prefill_tokens_per_sec": 159.24831881032108,
+      "decode_tokens_per_sec": 51.40381721438722,
+      "mean_latency_ms": 19.45380818372597,
+      "p50_latency_ms": 19.28368700100691,
+      "p90_latency_ms": 19.80397300212644,
+      "wall_seconds": 0.9971931090040016,
+      "cost_per_1k_tokens": 0.0019777663328579363,
+      "generated_tokens": 50
+    }
+  ],
+  "summary": {
+    "prefill_tokens_per_sec": {
+      "median": 159.83315610410224,
+      "min": 158.92087819705733,
+      "max": 165.07110508276634
+    },
+    "decode_tokens_per_sec": {
+      "median": 51.187728824771476,
+      "min": 51.080215362846495,
+      "max": 51.40381721438722
+    },
+    "mean_latency_ms": {
+      "median": 19.535932204049384,
+      "min": 19.45380818372597,
+      "max": 19.577051367080884
+    },
+    "p50_latency_ms": {
+      "median": 19.3012869967788,
+      "min": 19.24035900083254,
+      "max": 19.329245998960687
+    },
+    "p90_latency_ms": {
+      "median": 19.88850600173464,
+      "min": 19.80397300212644,
+      "max": 20.213635001709918
+    },
+    "wall_seconds": {
+      "median": 1.0001761439998518,
+      "min": 0.9971931090040016,
+      "max": 1.003322592987388
+    },
+    "cost_per_1k_tokens": {
+      "median": 0.001983682685599706,
+      "min": 0.0019777663328579363,
+      "max": 0.001989923142758319
+    },
+    "generated_tokens": {
+      "median": 50,
+      "min": 50,
+      "max": 50
+    }
+  },
+  "reference_generation": "The history of artificial intelligence began with the invention of the computer in the late 19th century. The first computer was created by a German scientist named Johannes von Neumann in 1859. The machine was designed to be able to perform tasks such as calculating the number of times a person has"
+}

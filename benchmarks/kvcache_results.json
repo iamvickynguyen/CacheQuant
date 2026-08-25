@@ -17,12 +17,12 @@
         "cached_tokens": 0,
         "hit_rate": 0.0,
         "recomputed_prefill_tokens": 23,
-        "baseline_prefill_seconds": 0.03818287199919723,
-        "cached_prefill_seconds": 0.03997211000023526,
-        "prefill_speedup": 0.9552378395579443,
-        "cache_overhead_seconds": 0.006231971001398051,
-        "honest_prefill_seconds": 0.04580395799712278,
-        "honest_prefill_speedup": 0.8360608019185773
+        "baseline_prefill_seconds": 0.03627538700311561,
+        "cached_prefill_seconds": 0.03621734699845547,
+        "prefill_speedup": 1.0004590808747966,
+        "cache_overhead_seconds": 0.005825056003232021,
+        "honest_prefill_seconds": 0.0420947239981615,
+        "honest_prefill_speedup": 0.8639792008690951
       },
       {
         "prompt": "You are a helpful assistant. Answer concisely and factually. User question: What is the boiling point of water in Celsius?",
@@ -30,12 +30,12 @@
         "cached_tokens": 19,
         "hit_rate": 0.7307692307692307,
         "recomputed_prefill_tokens": 7,
-        "baseline_prefill_seconds": 0.040179490999435075,
-        "cached_prefill_seconds": 0.035096010000415845,
-        "prefill_speedup": 1.1580473075498776,
-        "cache_overhead_seconds": 0.004991736001102254,
-        "honest_prefill_seconds": 0.04015360699941084,
-        "honest_prefill_speedup": 1.0134360726677165
+        "baseline_prefill_seconds": 0.03767799799970817,
+        "cached_prefill_seconds": 0.032789035998575855,
+        "prefill_speedup": 1.1481423900482928,
+        "cache_overhead_seconds": 0.0046410570066655055,
+        "honest_prefill_seconds": 0.037461681007698644,
+        "honest_prefill_speedup": 1.0048373961188772
       },
       {
         "prompt": "You are a helpful assistant. Answer concisely and factually. User question: Who wrote the play Hamlet?",
@@ -43,12 +43,12 @@
         "cached_tokens": 16,
         "hit_rate": 0.6956521739130435,
         "recomputed_prefill_tokens": 7,
-        "baseline_prefill_seconds": 0.039521059000435343,
-        "cached_prefill_seconds": 0.03478382100001909,
-        "prefill_speedup": 1.1241081847867773,
-        "cache_overhead_seconds": 0.004846796000492759,
-        "honest_prefill_seconds": 0.04000373100006982,
-        "honest_prefill_speedup": 0.9896945112363806
+        "baseline_prefill_seconds": 0.03625599199949647,
+        "cached_prefill_seconds": 0.032929312001215294,
+        "prefill_speedup": 1.0987031553157656,
+        "cache_overhead_seconds": 0.004754644996864954,
+        "honest_prefill_seconds": 0.03764551699714502,
+        "honest_prefill_speedup": 0.9648029494354565
       },
       {
         "prompt": "You are a helpful assistant. Answer concisely and factually. User question: What is the largest planet in the solar system?",
@@ -56,12 +56,12 @@
         "cached_tokens": 19,
         "hit_rate": 0.7307692307692307,
         "recomputed_prefill_tokens": 7,
-        "baseline_prefill_seconds": 0.041680186000121466,
-        "cached_prefill_seconds": 0.036700540000310866,
-        "prefill_speedup": 1.1530092892086867,
-        "cache_overhead_seconds": 0.0049631470001259,
-        "honest_prefill_seconds": 0.04172232100063411,
-        "honest_prefill_speedup": 1.012628829364171
+        "baseline_prefill_seconds": 0.03762884400202893,
+        "cached_prefill_seconds": 0.03284062499733409,
+        "prefill_speedup": 1.1446904931248731,
+        "cache_overhead_seconds": 0.004653706004319247,
+        "honest_prefill_seconds": 0.03747988400209579,
+        "honest_prefill_speedup": 1.0023275081063554
       },
       {
         "prompt": "You are a helpful assistant. Answer concisely and factually. User question: How many continents are there on Earth?",
@@ -69,17 +69,17 @@
         "cached_tokens": 16,
         "hit_rate": 0.6666666666666666,
         "recomputed_prefill_tokens": 8,
-        "baseline_prefill_seconds": 0.041155240000080084,
-        "cached_prefill_seconds": 0.03597460899982252,
-        "prefill_speedup": 1.1174775867545477,
-        "cache_overhead_seconds": 0.004980157001227781,
-        "honest_prefill_seconds": 0.0409547660010503,
-        "honest_prefill_speedup": 0.9807227627807148
+        "baseline_prefill_seconds": 0.03653822100022808,
+        "cached_prefill_seconds": 0.03317269900071551,
+        "prefill_speedup": 1.1012546614596703,
+        "cache_overhead_seconds": 0.004703894002886955,
+        "honest_prefill_seconds": 0.037881421005295124,
+        "honest_prefill_speedup": 0.9643669151115563
       }
     ],
     "avg_hit_rate": 0.5647714604236344,
-    "avg_prefill_speedup": 1.0996660714767628,
-    "avg_honest_prefill_speedup": 0.9620418118410952
+    "avg_prefill_speedup": 1.097811961668221,
+    "avg_honest_prefill_speedup": 0.957485210790652
   },
   "long_high_reuse": {
     "label": "long_high_reuse",
@@ -99,12 +99,12 @@
         "cached_tokens": 0,
         "hit_rate": 0.0,
         "recomputed_prefill_tokens": 282,
-        "baseline_prefill_seconds": 0.22155206100069336,
-        "cached_prefill_seconds": 0.22398926999994728,
-        "prefill_speedup": 0.972641063504546,
-        "cache_overhead_seconds": 0.038381270998797845,
-        "honest_prefill_seconds": 0.2757283080018169,
-        "honest_prefill_speedup": 0.7918960355647447
+        "baseline_prefill_seconds": 0.22777233799934038,
+        "cached_prefill_seconds": 0.2275254460000724,
+        "prefill_speedup": 1.0010899833402123,
+        "cache_overhead_seconds": 0.0399391220016696,
+        "honest_prefill_seconds": 0.2765337369964982,
+        "honest_prefill_speedup": 0.8456093957124752
       },
       {
         "prompt": "The history of computing spans centuries, from early mechanical calculators to today's massively parallel processors. In the nineteenth century, Charles Babbage designed the Analytical Engine, a mechanical device intended to perform general-purpose calculations using punched cards for input. Ada Lovelace, working alongside Babbage, wrote what many consider the first computer algorithm, recognizing that such a machine could manipulate symbols beyond mere numbers. Decades later, in the 1930s and 1940s, researchers such as Alan Turing formalized the theoretical limits of computation, while engineers built the first electronic computers using vacuum tubes. The invention of the transistor in 1947 at Bell Labs triggered a wave of miniaturization that made computers smaller, faster, and more reliable. By the 1960s, integrated circuits allowed thousands of transistors to be packed onto a single chip, and the following decades saw exponential growth in computing power, a trend often described by Moore's Law. Personal computers emerged in the 1970s and 1980s, bringing computation into homes and small businesses for the first time. The internet, which grew from research networks in the 1960s and 1970s into a global infrastructure by the 1990s, transformed computers from isolated tools into interconnected nodes capable of sharing information instantly. In recent years, specialized hardware accelerators designed for parallel workloads have become central to training and running large machine learning models. Based on this history, who designed the Analytical Engine?",
@@ -112,12 +112,12 @@
         "cached_tokens": 275,
         "hit_rate": 0.975177304964539,
         "recomputed_prefill_tokens": 7,
-        "baseline_prefill_seconds": 0.23127487400051905,
-        "cached_prefill_seconds": 0.04041414800030907,
-        "prefill_speedup": 5.892194548512736,
-        "cache_overhead_seconds": 0.014131156000075862,
-        "honest_prefill_seconds": 0.054593313998339,
-        "honest_prefill_speedup": 4.367777984817007
+        "baseline_prefill_seconds": 0.21748177199697238,
+        "cached_prefill_seconds": 0.03600228700088337,
+        "prefill_speedup": 6.072469141232766,
+        "cache_overhead_seconds": 0.013155656997696497,
+        "honest_prefill_seconds": 0.0489700459947926,
+        "honest_prefill_speedup": 4.448893870907062
       },
       {
         "prompt": "The history of computing spans centuries, from early mechanical calculators to today's massively parallel processors. In the nineteenth century, Charles Babbage designed the Analytical Engine, a mechanical device intended to perform general-purpose calculations using punched cards for input. Ada Lovelace, working alongside Babbage, wrote what many consider the first computer algorithm, recognizing that such a machine could manipulate symbols beyond mere numbers. Decades later, in the 1930s and 1940s, researchers such as Alan Turing formalized the theoretical limits of computation, while engineers built the first electronic computers using vacuum tubes. The invention of the transistor in 1947 at Bell Labs triggered a wave of miniaturization that made computers smaller, faster, and more reliable. By the 1960s, integrated circuits allowed thousands of transistors to be packed onto a single chip, and the following decades saw exponential growth in computing power, a trend often described by Moore's Law. Personal computers emerged in the 1970s and 1980s, bringing computation into homes and small businesses for the first time. The internet, which grew from research networks in the 1960s and 1970s into a global infrastructure by the 1990s, transformed computers from isolated tools into interconnected nodes capable of sharing information instantly. In recent years, specialized hardware accelerators designed for parallel workloads have become central to training and running large machine learning models. Based on this history, which decade did personal computers emerge in?",
@@ -125,12 +125,12 @@
         "cached_tokens": 275,
         "hit_rate": 0.9717314487632509,
         "recomputed_prefill_tokens": 8,
-        "baseline_prefill_seconds": 0.2291037149998374,
-        "cached_prefill_seconds": 0.04017389799992088,
-        "prefill_speedup": 5.734633349625539,
-        "cache_overhead_seconds": 0.013601517000097374,
-        "honest_prefill_seconds": 0.053775415000018256,
-        "honest_prefill_speedup": 4.2914622869553005
+        "baseline_prefill_seconds": 0.22850269300033688,
+        "cached_prefill_seconds": 0.036525863000861136,
+        "prefill_speedup": 6.2210542114404745,
+        "cache_overhead_seconds": 0.01316379500349285,
+        "honest_prefill_seconds": 0.0498943370039342,
+        "honest_prefill_speedup": 4.579732024143728
       },
       {
         "prompt": "The history of computing spans centuries, from early mechanical calculators to today's massively parallel processors. In the nineteenth century, Charles Babbage designed the Analytical Engine, a mechanical device intended to perform general-purpose calculations using punched cards for input. Ada Lovelace, working alongside Babbage, wrote what many consider the first computer algorithm, recognizing that such a machine could manipulate symbols beyond mere numbers. Decades later, in the 1930s and 1940s, researchers such as Alan Turing formalized the theoretical limits of computation, while engineers built the first electronic computers using vacuum tubes. The invention of the transistor in 1947 at Bell Labs triggered a wave of miniaturization that made computers smaller, faster, and more reliable. By the 1960s, integrated circuits allowed thousands of transistors to be packed onto a single chip, and the following decades saw exponential growth in computing power, a trend often described by Moore's Law. Personal computers emerged in the 1970s and 1980s, bringing computation into homes and small businesses for the first time. The internet, which grew from research networks in the 1960s and 1970s into a global infrastructure by the 1990s, transformed computers from isolated tools into interconnected nodes capable of sharing information instantly. In recent years, specialized hardware accelerators designed for parallel workloads have become central to training and running large machine learning models. Based on this history, what law describes the growth in computing power?",
@@ -138,12 +138,12 @@
         "cached_tokens": 276,
         "hit_rate": 0.971830985915493,
         "recomputed_prefill_tokens": 8,
-        "baseline_prefill_seconds": 0.23137397299979057,
-        "cached_prefill_seconds": 0.039404952000040794,
-        "prefill_speedup": 5.886287845243401,
-        "cache_overhead_seconds": 0.012705412000286742,
-        "honest_prefill_seconds": 0.052110364000327536,
-        "honest_prefill_speedup": 4.478087418558336
+        "baseline_prefill_seconds": 0.22929537900199648,
+        "cached_prefill_seconds": 0.03664226500040968,
+        "prefill_speedup": 6.257674818940173,
+        "cache_overhead_seconds": 0.01327750199197908,
+        "honest_prefill_seconds": 0.04991976699238876,
+        "honest_prefill_speedup": 4.59327823058463
       },
       {
         "prompt": "The history of computing spans centuries, from early mechanical calculators to today's massively parallel processors. In the nineteenth century, Charles Babbage designed the Analytical Engine, a mechanical device intended to perform general-purpose calculations using punched cards for input. Ada Lovelace, working alongside Babbage, wrote what many consider the first computer algorithm, recognizing that such a machine could manipulate symbols beyond mere numbers. Decades later, in the 1930s and 1940s, researchers such as Alan Turing formalized the theoretical limits of computation, while engineers built the first electronic computers using vacuum tubes. The invention of the transistor in 1947 at Bell Labs triggered a wave of miniaturization that made computers smaller, faster, and more reliable. By the 1960s, integrated circuits allowed thousands of transistors to be packed onto a single chip, and the following decades saw exponential growth in computing power, a trend often described by Moore's Law. Personal computers emerged in the 1970s and 1980s, bringing computation into homes and small businesses for the first time. The internet, which grew from research networks in the 1960s and 1970s into a global infrastructure by the 1990s, transformed computers from isolated tools into interconnected nodes capable of sharing information instantly. In recent years, specialized hardware accelerators designed for parallel workloads have become central to training and running large machine learning models. Based on this history, what 1947 invention triggered a wave of miniaturization?",
@@ -151,17 +151,17 @@
         "cached_tokens": 276,
         "hit_rate": 0.965034965034965,
         "recomputed_prefill_tokens": 10,
-        "baseline_prefill_seconds": 0.22521950999998808,
-        "cached_prefill_seconds": 0.04059636199963279,
-        "prefill_speedup": 5.704900511377532,
-        "cache_overhead_seconds": 0.013024506998590368,
-        "honest_prefill_seconds": 0.05362086899822316,
-        "honest_prefill_speedup": 4.393499297362692
+        "baseline_prefill_seconds": 0.23086874700311455,
+        "cached_prefill_seconds": 0.037316098998417147,
+        "prefill_speedup": 6.163703727967144,
+        "cache_overhead_seconds": 0.013072689998807618,
+        "honest_prefill_seconds": 0.05061074799596099,
+        "honest_prefill_speedup": 4.536517414846311
       }
     ],
     "avg_hit_rate": 0.7767549409356496,
-    "avg_prefill_speedup": 2.9604456519106903,
-    "avg_honest_prefill_speedup": 2.3243332464330657
+    "avg_prefill_speedup": 3.031777189691498,
+    "avg_honest_prefill_speedup": 2.382544032133924
   },
   "no_reuse": {
     "label": "no_reuse",
@@ -181,12 +181,12 @@
         "cached_tokens": 0,
         "hit_rate": 0.0,
         "recomputed_prefill_tokens": 7,
-        "baseline_prefill_seconds": 0.03601620100016589,
-        "cached_prefill_seconds": 0.03410902499945223,
-        "prefill_speedup": 1.024722749392722,
-        "cache_overhead_seconds": 0.0035464189986669226,
-        "honest_prefill_seconds": 0.03762470800029405,
-        "honest_prefill_speedup": 0.9367994006722571
+        "baseline_prefill_seconds": 0.03259320500001195,
+        "cached_prefill_seconds": 0.03251307699974859,
+        "prefill_speedup": 1.0030856237781105,
+        "cache_overhead_seconds": 0.0034541869936219882,
+        "honest_prefill_seconds": 0.03596726399337058,
+        "honest_prefill_speedup": 0.907794171409138
       },
       {
         "prompt": "In a small village nestled between two mountains,",
@@ -194,12 +194,12 @@
         "cached_tokens": 0,
         "hit_rate": 0.0,
         "recomputed_prefill_tokens": 10,
-        "baseline_prefill_seconds": 0.03502890500021749,
-        "cached_prefill_seconds": 0.0348018000004231,
-        "prefill_speedup": 0.994907324680243,
-        "cache_overhead_seconds": 0.004100983000171254,
-        "honest_prefill_seconds": 0.0392895619970659,
-        "honest_prefill_speedup": 0.8927460580643708
+        "baseline_prefill_seconds": 0.03364933699776884,
+        "cached_prefill_seconds": 0.033578266000404255,
+        "prefill_speedup": 1.003446028119394,
+        "cache_overhead_seconds": 0.0038607370042882394,
+        "honest_prefill_seconds": 0.03744334099974367,
+        "honest_prefill_speedup": 0.8995944157003023
       },
       {
         "prompt": "def calculate_average(numbers):",
@@ -207,12 +207,12 @@
         "cached_tokens": 0,
         "hit_rate": 0.0,
         "recomputed_prefill_tokens": 8,
-        "baseline_prefill_seconds": 0.03425429700018867,
-        "cached_prefill_seconds": 0.03485512499992183,
-        "prefill_speedup": 1.0067552893521314,
-        "cache_overhead_seconds": 0.0037019550018158043,
-        "honest_prefill_seconds": 0.03855289800048922,
-        "honest_prefill_speedup": 0.9082371320634691
+        "baseline_prefill_seconds": 0.0329742020003323,
+        "cached_prefill_seconds": 0.03290987099899212,
+        "prefill_speedup": 1.0029881100129432,
+        "cache_overhead_seconds": 0.0035909739999624435,
+        "honest_prefill_seconds": 0.03649734800274018,
+        "honest_prefill_speedup": 0.9037475840327319
       },
       {
         "prompt": "Scientists have discovered a new species of",
@@ -220,12 +220,12 @@
         "cached_tokens": 0,
         "hit_rate": 0.0,
         "recomputed_prefill_tokens": 7,
-        "baseline_prefill_seconds": 0.03789900399988255,
-        "cached_prefill_seconds": 0.0358990079994328,
-        "prefill_speedup": 1.0215162599266385,
-        "cache_overhead_seconds": 0.0036696400011351216,
-        "honest_prefill_seconds": 0.03956864800056792,
-        "honest_prefill_speedup": 0.9284585045074615
+        "baseline_prefill_seconds": 0.03258501799791702,
+        "cached_prefill_seconds": 0.03252389200133621,
+        "prefill_speedup": 1.002033480493819,
+        "cache_overhead_seconds": 0.0034351759968558326,
+        "honest_prefill_seconds": 0.03597680199527531,
+        "honest_prefill_speedup": 0.9057230268047806
       },
       {
         "prompt": "The recipe calls for two cups of flour and",
@@ -233,16 +233,16 @@
         "cached_tokens": 1,
         "hit_rate": 0.1111111111111111,
         "recomputed_prefill_tokens": 8,
-        "baseline_prefill_seconds": 0.03475336300016352,
-        "cached_prefill_seconds": 0.03653607700016437,
-        "prefill_speedup": 0.9993489001126435,
-        "cache_overhead_seconds": 0.004391770999063738,
-        "honest_prefill_seconds": 0.04071892100091645,
-        "honest_prefill_speedup": 0.8908524147178644
+        "baseline_prefill_seconds": 0.03331412999978056,
+        "cached_prefill_seconds": 0.03293054399910034,
+        "prefill_speedup": 1.0111445825350631,
+        "cache_overhead_seconds": 0.004125881005165866,
+        "honest_prefill_seconds": 0.037085238996951375,
+        "honest_prefill_speedup": 0.897847801298787
       }
     ],
     "avg_hit_rate": 0.02222222222222222,
-    "avg_prefill_speedup": 1.0099360086121505,
-    "avg_honest_prefill_speedup": 0.9090547321019566
+    "avg_prefill_speedup": 1.0040147115421747,
+    "avg_honest_prefill_speedup": 0.9024206013067176
   }
 }
