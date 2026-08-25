@@ -119,3 +119,22 @@ def test_bfp_matmul_kernel_dequant_matches_reference_dequant_formula():
     # a formula mismatch. Still two orders of magnitude tighter than the
     # 0.10 fp32-accuracy bound used elsewhere in this file.
     assert np.allclose(got, expected, rtol=1e-3)
+
+
+def test_bfp_matmul_prequantized_rejects_an_int8_prepared_operand():
+    # Mirror of the int8 guard. An int8 operand is (n, 1, k), so
+    # num_blocks * block_size still equals k and the reduction-axis check
+    # passes — but the kernel would then walk `blk` up to k/32 across an array
+    # with one block, reading out of bounds without raising, because @njit
+    # does not bounds-check.
+    from cachequant.kernel.int8_numba import prepare_int8_operand
+
+    rng = np.random.default_rng(9)
+    a = rng.standard_normal((3, 64)).astype(np.float32)
+    b_mantissa, b_scale = prepare_int8_operand(rng.standard_normal((5, 64)).astype(np.float32))
+
+    try:
+        bfp_matmul_prequantized(a, b_mantissa, b_scale)
+        assert False, "expected ValueError"
+    except ValueError:
+        pass

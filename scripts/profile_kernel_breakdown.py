@@ -1,9 +1,10 @@
-"""Per-stage timing attribution for a single BFP-quantized linear layer.
+"""Per-stage timing attribution for a single quantized linear layer, per scheme.
 
-The end-to-end benchmark (`run_bfp_benchmark.py`) says *how far* the BFP path is
-from the fp32 baseline. It does not say *where* that distance comes from. This
-script decomposes one `BFPConv1D.forward` into its stages so the remaining gap
-can be attributed rather than hand-waved:
+The end-to-end benchmarks (`run_bfp_benchmark.py`, `run_int8_benchmark.py`) say
+*how far* each quantized path is from the fp32 baseline. They do not say *where*
+that distance comes from, and with two schemes they also cannot say why one is
+faster than the other. This script decomposes a single `forward` of each into
+its stages so both gaps can be attributed rather than hand-waved:
 
   - activation quantize  — fp32 -> (int8 mantissa, per-block scale) for `x`
   - int8 kernel          — the `@njit` int8xint8->int32 block matmul itself
@@ -17,8 +18,13 @@ profiled, since they stress completely different limits: decode (M=1) is a
 matrix-vector product bounded by weight memory traffic, prefill (M=long) is a
 matrix-matrix product bounded by arithmetic throughput.
 
+Both schemes run the *same* njit kernel (see `cachequant/kernel/blocked_matmul.py`),
+so the `int8_kernel_ms` column is a like-for-like comparison of what the block
+structure costs: BFP does `k // 32` float scale multiplies per output element,
+plain int8 does one. Everything else about the two paths is identical.
+
 Weight quantization is deliberately absent from the table: it happens once at
-`BFPConv1D` construction, not per call.
+layer construction, not per call.
 """
 
 import json
@@ -33,12 +39,20 @@ from transformers.pytorch_utils import Conv1D
 
 from cachequant.bench.config import DEFAULT_CONFIG
 from cachequant.kernel.bfp_linear import BFPConv1D
-from cachequant.kernel.bfp_numba import _bfp_matmul_kernel, prepare_bfp_operand
+from cachequant.kernel.bfp_numba import _KERNEL, prepare_bfp_operand
+from cachequant.kernel.int8_linear import Int8Conv1D
+from cachequant.kernel.int8_numba import prepare_int8_operand
 
-OUTPUT_PATH = Path(__file__).resolve().parent.parent / "benchmarks" / "bfp_breakdown.json"
+OUTPUT_PATH = Path(__file__).resolve().parent.parent / "benchmarks" / "kernel_breakdown.json"
+
+# (key, layer class, operand-prep function) for each scheme profiled.
+SCHEMES = [
+    ("bfp8", BFPConv1D, prepare_bfp_operand),
+    ("int8", Int8Conv1D, prepare_int8_operand),
+]
 
 # (name, nx = reduction axis, nf = output features) for every GPT-2 small linear
-# the BFP kernel is applied to.
+# either quantized kernel is applied to.
 LAYERS = [
     ("attn.c_attn", 768, 2304),
     ("attn.c_proj", 768, 768),
@@ -99,30 +113,30 @@ def _time(fn, n_reps: int = N_REPS) -> float:
     return float(np.median(samples))
 
 
-def profile_layer(nx: int, nf: int, m: int) -> StageTimings:
+def profile_layer(nx: int, nf: int, m: int, layer_cls, prepare_operand) -> StageTimings:
     torch.manual_seed(0)
     conv = Conv1D(nf=nf, nx=nx)
-    bfp_conv = BFPConv1D(conv)
+    quantized_conv = layer_cls(conv)
     x = torch.randn(m, nx) * 0.5
 
     x_np = np.ascontiguousarray(x.numpy(), dtype=np.float32)
-    a_mantissa, a_scale = prepare_bfp_operand(x_np)
+    a_mantissa, a_scale = prepare_operand(x_np)
 
     with torch.no_grad():
-        total_ms = _time(lambda: bfp_conv(x))
+        total_ms = _time(lambda: quantized_conv(x))
         fp32_ms = _time(lambda: conv(x))
 
-    quantize_ms = _time(lambda: prepare_bfp_operand(x_np))
+    quantize_ms = _time(lambda: prepare_operand(x_np))
     # Re-uses the same already-quantized arrays every call, so this is the
     # kernel's steady-state compute cost with its inputs hot and its Numba
     # type signature already resolved.
     kernel_ms = _time(
-        lambda: _bfp_matmul_kernel(
+        lambda: _KERNEL(
             a_mantissa,
             a_scale,
-            bfp_conv.weight_mantissa,
-            bfp_conv.weight_scale,
-            bfp_conv.bias_np,
+            quantized_conv.weight_mantissa,
+            quantized_conv.weight_scale,
+            quantized_conv.bias_np,
         )
     )
     return StageTimings(
@@ -130,7 +144,7 @@ def profile_layer(nx: int, nf: int, m: int) -> StageTimings:
         activation_quantize_ms=quantize_ms,
         int8_kernel_ms=kernel_ms,
         # One residual, not two. An earlier version also timed
-        # bfp_matmul_prequantized to split this into "Numba dispatch" and
+        # <scheme>_matmul_prequantized to split this into "Numba dispatch" and
         # "torch wrapper", but differencing two separately-timed quantities put
         # the decode-phase result inside the noise. This residual is Numba
         # dispatch plus the per-call allocation of the activation's
@@ -148,30 +162,55 @@ def main() -> None:
     torch.set_num_threads(DEFAULT_CONFIG.cpu_threads)
 
     rows = []
-    for phase, m in PHASES:
-        for name, nx, nf in LAYERS:
-            timings = profile_layer(nx, nf, m)
-            rows.append({"phase": phase, "m": m, "layer": name, "nx": nx, "nf": nf} | vars(timings))
+    for scheme, layer_cls, prepare_operand in SCHEMES:
+        for phase, m in PHASES:
+            for name, nx, nf in LAYERS:
+                timings = profile_layer(nx, nf, m, layer_cls, prepare_operand)
+                rows.append(
+                    {"scheme": scheme, "phase": phase, "m": m, "layer": name, "nx": nx, "nf": nf}
+                    | vars(timings)
+                )
 
     header = (
-        f"{'phase':8} {'layer':12} {'M':>4} {'total':>9} {'quant':>9} "
+        f"{'scheme':7} {'phase':8} {'layer':12} {'M':>4} {'total':>9} {'quant':>9} "
         f"{'kernel':>9} {'other':>9} {'fp32':>9} {'ratio':>7}"
     )
     print(header)
     print("-" * len(header))
     for row in rows:
         print(
-            f"{row['phase']:8} {row['layer']:12} {row['m']:>4} "
+            f"{row['scheme']:7} {row['phase']:8} {row['layer']:12} {row['m']:>4} "
             f"{row['total_ms']:>8.3f}m {row['activation_quantize_ms']:>8.3f}m "
             f"{row['int8_kernel_ms']:>8.3f}m {row['other_ms']:>8.3f}m "
             f"{row['fp32_reference_ms']:>8.3f}m {row['ratio_vs_fp32']:>6.1f}x"
         )
 
+    # The comparison the two-scheme table exists for: same kernel, same shapes,
+    # different block structure.
+    print()
+    for phase, _ in PHASES:
+        for name, _, _ in LAYERS:
+            def kernel_ms(scheme):
+                return next(
+                    r["int8_kernel_ms"]
+                    for r in rows
+                    if r["scheme"] == scheme and r["phase"] == phase and r["layer"] == name
+                )
+
+            bfp_ms, int8_ms = kernel_ms("bfp8"), kernel_ms("int8")
+            print(
+                f"kernel speedup  {phase:8} {name:12} "
+                f"bfp8={bfp_ms:7.3f}ms  int8={int8_ms:7.3f}ms  "
+                f"{bfp_ms / int8_ms if int8_ms else 0:.2f}x"
+            )
+
     payload = {
         "n_reps": N_REPS,
         "threads": DEFAULT_CONFIG.cpu_threads,
         "note": "times in milliseconds, median of n_reps; weight quantization "
-        "is excluded because it happens once at construction, not per call",
+        "is excluded because it happens once at construction, not per call. "
+        "int8_kernel_ms is the shared blocked-int8 njit kernel for both "
+        "schemes, so it is directly comparable across the scheme column",
         "rows": rows,
     }
     OUTPUT_PATH.parent.mkdir(parents=True, exist_ok=True)

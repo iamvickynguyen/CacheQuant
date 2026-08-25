@@ -4,11 +4,13 @@ import statistics
 import time
 from pathlib import Path
 
+import numba
 import torch
 
 from cachequant.bench.config import DEFAULT_CONFIG
 from cachequant.bench.provenance import provenance
 from cachequant.kernel.bfp_linear import apply_bfp_quantization
+from cachequant.kernel.int8_linear import apply_int8_quantization
 from cachequant.kvcache.trie_cache import PrefixKVCache
 from cachequant.model import load_model
 from cachequant.pipeline import generate
@@ -171,16 +173,29 @@ def _run_combo(model, tokenizer, prompts: list[str], use_cache: bool, label: str
 
 def main() -> None:
     torch.set_num_threads(DEFAULT_CONFIG.cpu_threads)
+    # Both quantized paths run their matmul under Numba's own thread pool,
+    # which otherwise defaults to every logical core while torch stays pinned
+    # to cpu_threads — making the quantized-vs-fp32 rows in this table not
+    # apples-to-apples. Same convention as run_bfp_benchmark.py's main().
+    numba.set_num_threads(DEFAULT_CONFIG.cpu_threads)
+
     fp32_model, tokenizer = load_model()
     bfp_model = apply_bfp_quantization(copy.deepcopy(fp32_model))
+    int8_model = apply_int8_quantization(copy.deepcopy(fp32_model))
 
-    generate(fp32_model, tokenizer, WARMUP_PROMPT, cache=None, max_new_tokens=WARMUP_MAX_NEW_TOKENS)
-    generate(bfp_model, tokenizer, WARMUP_PROMPT, cache=None, max_new_tokens=WARMUP_MAX_NEW_TOKENS)
+    # One warmup generation per model: fp32 for BLAS/thread-pool spin-up, and
+    # each quantized model for its own Numba JIT compilation.
+    for model in (fp32_model, bfp_model, int8_model):
+        generate(model, tokenizer, WARMUP_PROMPT, cache=None, max_new_tokens=WARMUP_MAX_NEW_TOKENS)
 
     results: dict = {"provenance": provenance()}
     for set_name, prompts in PROMPT_SETS.items():
         set_results = {}
-        for model_label, model in (("fp32", fp32_model), ("bfp", bfp_model)):
+        for model_label, model in (
+            ("fp32", fp32_model),
+            ("bfp", bfp_model),
+            ("int8", int8_model),
+        ):
             for cache_label, use_cache in (("no_cache", False), ("cache", True)):
                 combo_label = f"{model_label}_{cache_label}"
                 print(f"{set_name} / {combo_label}")

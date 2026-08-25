@@ -1,0 +1,105 @@
+{
+  "provenance": {
+    "platform_processor": "",
+    "cpu_model": "Intel(R) Core(TM) i7-8700K CPU @ 3.70GHz",
+    "platform_machine": "x86_64",
+    "cpu_count": 12,
+    "torch_version": "2.13.0+cu130",
+    "transformers_version": "5.14.1"
+  },
+  "n_passages": 3,
+  "prompts": [
+    "The history of artificial intelligence began with",
+    "In the middle of the night, she heard"
+  ],
+  "max_new_tokens": 30,
+  "fp32_perplexity": 39.85970687866211,
+  "fp32_generations": [
+    "The history of artificial intelligence began with the invention of the computer. The first computer was a computer that could read and write to a computer. The computer was designed to be able to read",
+    "In the middle of the night, she heard a loud bang.\n\n\"What's going on?\"\n\n\"I'm not sure. I'm not sure what's going on. I"
+  ],
+  "schemes": [
+    {
+      "key": "bfp8",
+      "label": "BFP8 (block-32, pow2 scale)",
+      "bits_per_value": 8.25,
+      "perplexity": 40.01237106323242,
+      "perplexity_delta": 0.003830037813249385,
+      "greedy_identical_to_fp32": true,
+      "generations": [
+        "The history of artificial intelligence began with the invention of the computer. The first computer was a computer that could read and write to a computer. The computer was designed to be able to read",
+        "In the middle of the night, she heard a loud bang.\n\n\"What's going on?\"\n\n\"I'm not sure. I'm not sure what's going on. I"
+      ]
+    },
+    {
+      "key": "int8_per_channel",
+      "label": "int8 (per-channel weight, per-token activation)",
+      "bits_per_value": 8.041666666666666,
+      "perplexity": 39.994441986083984,
+      "perplexity_delta": 0.0033802332724629756,
+      "greedy_identical_to_fp32": false,
+      "generations": [
+        "The history of artificial intelligence began with the invention of the computer in the late 19th century. The first computer was created by a German scientist named Johannes von Neumann in 1859.",
+        "In the middle of the night, she heard a loud bang.\n\n\"What's going on?\"\n\n\"I'm not sure,\" she said. \"I'm not sure what's"
+      ]
+    },
+    {
+      "key": "int8_per_tensor_weight",
+      "label": "int8 (per-tensor weight, per-token activation)",
+      "bits_per_value": 8.0,
+      "perplexity": 47.57110595703125,
+      "perplexity_delta": 0.1934635169757669,
+      "greedy_identical_to_fp32": false,
+      "generations": [
+        "The history of artificial intelligence began with the invention of the computer. The first computer was a computer that could read and interpret text. The second was a computer that could read and interpret text",
+        "In the middle of the night, she heard a loud bang.\n\n\"I'm sorry, I'm sorry,\" she said.\n\n\"I'm sorry, I'm sorry,\" she"
+      ]
+    },
+    {
+      "key": "int8_per_tensor_both",
+      "label": "int8 (per-tensor weight and activation)",
+      "bits_per_value": 8.0,
+      "perplexity": 67.20306396484375,
+      "perplexity_delta": 0.6859899188275069,
+      "greedy_identical_to_fp32": false,
+      "generations": [
+        "The history of artificial intelligence began with the invention of the computer. The first computer was a computer that could do things like calculate the distance between two planets. The second computer was a computer",
+        "In the middle of the night, she heard a voice in the distance, and she heard a voice in the distance, and she heard a voice in the distance, and she heard a voice in"
+      ]
+    }
+  ],
+  "granularity_scale_grid": [
+    {
+      "granularity": "block-32",
+      "scale": "pow2",
+      "bits_per_value": 8.25,
+      "perplexity": 40.01237106323242,
+      "perplexity_delta": 0.003830037813249385,
+      "is_shipped_scheme": true
+    },
+    {
+      "granularity": "block-32",
+      "scale": "exact",
+      "bits_per_value": 9.0,
+      "perplexity": 39.82640838623047,
+      "perplexity_delta": -0.0008353923056435253,
+      "is_shipped_scheme": false
+    },
+    {
+      "granularity": "per-channel",
+      "scale": "pow2",
+      "bits_per_value": 8.010416666666666,
+      "perplexity": 40.92979431152344,
+      "perplexity_delta": 0.026846344759102393,
+      "is_shipped_scheme": false
+    },
+    {
+      "granularity": "per-channel",
+      "scale": "exact",
+      "bits_per_value": 8.041666666666666,
+      "perplexity": 39.994441986083984,
+      "perplexity_delta": 0.0033802332724629756,
+      "is_shipped_scheme": true
+    }
+  ]
+}

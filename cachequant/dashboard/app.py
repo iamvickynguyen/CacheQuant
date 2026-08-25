@@ -10,6 +10,7 @@ import torch
 from cachequant.bench.config import DEFAULT_CONFIG
 from cachequant.bench.harness import compute_bench_result
 from cachequant.kernel.bfp_linear import apply_bfp_quantization
+from cachequant.kernel.int8_linear import apply_int8_quantization
 from cachequant.kvcache.trie_cache import PrefixKVCache
 from cachequant.model import load_model
 from cachequant.pipeline import generate
@@ -161,32 +162,39 @@ def _init_session_state(replay_mode: bool) -> None:
         st.session_state.prompt_index = {name: 0 for name in PROMPT_SETS}
 
     if replay_mode:
-        # Offline fallback path: no load_model(), no apply_bfp_quantization(),
+        # Offline fallback path: no load_model(), no quantization pass,
         # no warmup - nothing here can fail the way the live path can (model
         # download, JIT compile stall, OOM, slow CPU). This is the whole point.
         if "replay_fixture" not in st.session_state:
             st.session_state.replay_fixture = _load_replay_fixture()
         return
 
-    if "fp32_model" in st.session_state:
+    if "models" in st.session_state:
         return
 
-    with st.spinner("Loading GPT-2, quantizing BFP copy, warming up both models..."):
+    with st.spinner("Loading GPT-2, quantizing BFP and int8 copies, warming up all three..."):
         # Pin both thread pools before any timed run. torch and numba have
-        # independent thread pools; without this BFP's numba matmul runs on
-        # every logical core while fp32's torch path is unpinned/different,
-        # making the on-screen comparison not apples-to-apples. Same
-        # convention as scripts/run_bfp_benchmark.py's main().
+        # independent thread pools; without this the quantized paths' numba
+        # matmul runs on every logical core while fp32's torch path is
+        # unpinned/different, making the on-screen comparison not
+        # apples-to-apples. Same convention as scripts/run_bfp_benchmark.py.
         torch.set_num_threads(DEFAULT_CONFIG.cpu_threads)
         numba.set_num_threads(DEFAULT_CONFIG.cpu_threads)
 
         fp32_model, tokenizer = load_model()
-        bfp_model = apply_bfp_quantization(copy.deepcopy(fp32_model))
+        models = {
+            "fp32": fp32_model,
+            "bfp": apply_bfp_quantization(copy.deepcopy(fp32_model)),
+            "int8": apply_int8_quantization(copy.deepcopy(fp32_model)),
+        }
 
-        # Discard one warmup generation per model so BFP's first-call Numba
-        # JIT compile time is never displayed to the user as a measurement.
-        generate(fp32_model, tokenizer, WARMUP_PROMPT, max_new_tokens=WARMUP_MAX_NEW_TOKENS)
-        generate(bfp_model, tokenizer, WARMUP_PROMPT, max_new_tokens=WARMUP_MAX_NEW_TOKENS)
+        # Discard one warmup generation per model so a quantized path's
+        # first-call Numba JIT compile time is never displayed as a
+        # measurement. Both schemes share one njit kernel, so the second
+        # quantized warmup is cheap - but its per-scheme operand prep is not
+        # already compiled, so it still needs one.
+        for model in models.values():
+            generate(model, tokenizer, WARMUP_PROMPT, max_new_tokens=WARMUP_MAX_NEW_TOKENS)
 
         # Also warm up the cache code path (first DynamicCache construction,
         # first tensor permute/contiguous allocations inside
@@ -194,28 +202,30 @@ def _init_session_state(replay_mode: bool) -> None:
         # inside the honestly-measured perf_counter window on the user's
         # first cache-on click. Uses throwaway caches, not the real session
         # caches below, which must stay genuinely cold.
-        warmup_cache = PrefixKVCache(max_tokens=DEFAULT_CONFIG.max_cache_tokens)
-        generate(fp32_model, tokenizer, WARMUP_PROMPT, cache=warmup_cache, max_new_tokens=WARMUP_MAX_NEW_TOKENS)
-        warmup_cache_bfp = PrefixKVCache(max_tokens=DEFAULT_CONFIG.max_cache_tokens)
-        generate(bfp_model, tokenizer, WARMUP_PROMPT, cache=warmup_cache_bfp, max_new_tokens=WARMUP_MAX_NEW_TOKENS)
+        for model in models.values():
+            warmup_cache = PrefixKVCache(max_tokens=DEFAULT_CONFIG.max_cache_tokens)
+            generate(model, tokenizer, WARMUP_PROMPT, cache=warmup_cache, max_new_tokens=WARMUP_MAX_NEW_TOKENS)
 
-    st.session_state.fp32_model = fp32_model
-    st.session_state.bfp_model = bfp_model
+    st.session_state.models = models
     st.session_state.tokenizer = tokenizer
-    st.session_state.fp32_cache = PrefixKVCache(max_tokens=DEFAULT_CONFIG.max_cache_tokens)
-    st.session_state.bfp_cache = PrefixKVCache(max_tokens=DEFAULT_CONFIG.max_cache_tokens)
+    # One cache per scheme, never shared: each scheme produces different K/V
+    # values for the same tokens, so one cache cannot correctly serve two.
+    st.session_state.caches = {
+        name: PrefixKVCache(max_tokens=DEFAULT_CONFIG.max_cache_tokens) for name in models
+    }
 
 
 def main() -> None:
     st.set_page_config(page_title="CacheQuant Dashboard", layout="wide")
     replay_mode = st.sidebar.toggle("Replay (offline)", value=False)
     _init_session_state(replay_mode)
-    st.title("CacheQuant — BFP quantization + KV-cache prefix reuse, live")
+    st.title("CacheQuant — BFP / int8 quantization + KV-cache prefix reuse, live")
     if replay_mode:
         st.sidebar.caption("Offline replay: pre-captured runs, no live model — safe if the live demo breaks.")
 
     with st.sidebar:
-        use_bfp = st.radio("Quantization", ["fp32", "BFP"], index=0) == "BFP"
+        scheme_label = st.radio("Quantization", ["fp32", "BFP", "int8"], index=0)
+        scheme = {"fp32": "fp32", "BFP": "bfp", "int8": "int8"}[scheme_label]
         use_cache = st.toggle("Prefix cache", value=False)
         prompt_set_name = st.radio("Prompt set", list(PROMPT_SETS.keys()), index=0)
         generate_clicked = st.button("Generate", type="primary")
@@ -223,16 +233,18 @@ def main() -> None:
         reset_clicked = st.button("Reset cache(s)", disabled=replay_mode)
 
     if reset_clicked and not replay_mode:
-        st.session_state.fp32_cache = PrefixKVCache(max_tokens=DEFAULT_CONFIG.max_cache_tokens)
-        st.session_state.bfp_cache = PrefixKVCache(max_tokens=DEFAULT_CONFIG.max_cache_tokens)
-        st.toast("Both caches reset.")
+        st.session_state.caches = {
+            name: PrefixKVCache(max_tokens=DEFAULT_CONFIG.max_cache_tokens)
+            for name in st.session_state.models
+        }
+        st.toast("All caches reset.")
 
     if clear_clicked:
         st.session_state.results_rows = []
         st.toast("Results table cleared.")
 
     if generate_clicked:
-        combo_key = ("bfp" if use_bfp else "fp32") + ("_cache" if use_cache else "_no_cache")
+        combo_key = scheme + ("_cache" if use_cache else "_no_cache")
 
         if replay_mode:
             fixture = st.session_state.replay_fixture
@@ -268,7 +280,7 @@ def main() -> None:
                     delta_color="inverse",
                 )
 
-            label = ("bfp" if use_bfp else "fp32") + ("+cache" if use_cache else "")
+            label = scheme + ("+cache" if use_cache else "")
             st.session_state.results_rows.append(
                 {
                     "config": label,
@@ -285,18 +297,16 @@ def main() -> None:
             prompt = _next_prompt(prompt_set_name)
 
             baseline_text, baseline_timing, _, baseline_wall = _timed_generate(
-                st.session_state.fp32_model, st.session_state.tokenizer, prompt, None
+                st.session_state.models["fp32"], st.session_state.tokenizer, prompt, None
             )
 
-            if not use_bfp and not use_cache:
+            if scheme == "fp32" and not use_cache:
                 combo_text, combo_timing, combo_stats, combo_wall = (
                     baseline_text, baseline_timing, None, baseline_wall
                 )
             else:
-                combo_model = st.session_state.bfp_model if use_bfp else st.session_state.fp32_model
-                combo_cache = None
-                if use_cache:
-                    combo_cache = st.session_state.bfp_cache if use_bfp else st.session_state.fp32_cache
+                combo_model = st.session_state.models[scheme]
+                combo_cache = st.session_state.caches[scheme] if use_cache else None
                 combo_text, combo_timing, combo_stats, combo_wall = _timed_generate(
                     combo_model, st.session_state.tokenizer, prompt, combo_cache
                 )
@@ -316,9 +326,9 @@ def main() -> None:
             combo_prefill_tok_s = _prefill_tokens_per_sec(combo_timing, combo_stats, combo_wall)
 
             # Prefill and decode charted separately, not as one aggregate
-            # tokens/sec: Phase 2 found BFP helps FLOP-bound prefill and hurts
-            # matrix-vector decode, and an aggregate number averages that
-            # finding away. This split is the main change from the original
+            # tokens/sec: Phase 2 found quantization hurts FLOP-bound prefill
+            # far more than memory-bound matrix-vector decode, and an aggregate
+            # number averages that finding away. This split is the main change from the original
             # Phase 4 sketch's single before/after bar chart.
             col1, col2 = st.columns(2)
             with col1:
@@ -346,7 +356,7 @@ def main() -> None:
                     delta_color="inverse",
                 )
 
-            label = ("bfp" if use_bfp else "fp32") + ("+cache" if use_cache else "")
+            label = scheme + ("+cache" if use_cache else "")
             cache_detail = "—"
             if combo_stats is not None:
                 cache_detail = (

@@ -9,6 +9,7 @@ import torch
 from cachequant.bench.config import DEFAULT_CONFIG
 from cachequant.bench.provenance import provenance
 from cachequant.kernel.bfp_linear import apply_bfp_quantization
+from cachequant.kernel.int8_linear import apply_int8_quantization
 from cachequant.kvcache.trie_cache import PrefixKVCache
 from cachequant.model import load_model
 from cachequant.pipeline import generate
@@ -58,17 +59,18 @@ def _run_case(model, tokenizer, prompt: str, max_new_tokens: int, cache) -> tupl
 
 def main() -> None:
     # Pin both thread pools before any timed run. torch and numba have
-    # independent thread pools; without this BFP's numba matmul runs on every
-    # logical core while fp32's torch path stays at cpu_threads, making the
-    # recorded BFP-vs-fp32 wall times not apples-to-apples. Same convention as
+    # independent thread pools; without this the quantized paths' numba matmul
+    # runs on every logical core while fp32's torch path stays at cpu_threads,
+    # making the recorded quantized-vs-fp32 wall times not apples-to-apples. Same convention as
     # scripts/run_bfp_benchmark.py's main() and the dashboard's model loader.
     torch.set_num_threads(DEFAULT_CONFIG.cpu_threads)
     numba.set_num_threads(DEFAULT_CONFIG.cpu_threads)
 
     fp32_model, tokenizer = load_model()
     bfp_model = apply_bfp_quantization(copy.deepcopy(fp32_model))
-    generate(fp32_model, tokenizer, WARMUP_PROMPT, cache=None, max_new_tokens=WARMUP_MAX_NEW_TOKENS)
-    generate(bfp_model, tokenizer, WARMUP_PROMPT, cache=None, max_new_tokens=WARMUP_MAX_NEW_TOKENS)
+    int8_model = apply_int8_quantization(copy.deepcopy(fp32_model))
+    for model in (fp32_model, bfp_model, int8_model):
+        generate(model, tokenizer, WARMUP_PROMPT, cache=None, max_new_tokens=WARMUP_MAX_NEW_TOKENS)
 
     over_context_prompt = _build_token_bounded_prompt(tokenizer, 1100)
     at_context_prompt = _build_token_bounded_prompt(tokenizer, 1024)
@@ -87,6 +89,8 @@ def main() -> None:
         ("fp32_cache", fp32_model, True),
         ("bfp_no_cache", bfp_model, False),
         ("bfp_cache", bfp_model, True),
+        ("int8_no_cache", int8_model, False),
+        ("int8_cache", int8_model, True),
     ]
 
     results = []

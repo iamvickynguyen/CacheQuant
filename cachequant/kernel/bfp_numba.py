@@ -1,36 +1,12 @@
 import numpy as np
-from numba import njit, prange
 
 from cachequant.kernel.bfp import DEFAULT_BLOCK_SIZE, quantize_bfp
+from cachequant.kernel.blocked_matmul import blocked_int8_matmul_kernel
 
-_INV_127_SQUARED = 1.0 / (127.0 * 127.0)
-
-
-@njit(cache=True, parallel=True)
-def _bfp_matmul_kernel(a_mantissa, a_scale, b_mantissa, b_scale, bias):
-    # `j` (output features) is the parallel axis rather than `i` (tokens),
-    # because `i` is 1 during decode — parallelising over it would leave the
-    # decode path single-threaded, which is the phase that needs the threads
-    # most. `j` is 768-3072 wide for every GPT-2 linear in scope, in both
-    # phases. Each thread owns a disjoint set of `j`, so the writes to `out`
-    # never race.
-    m, num_blocks, block_size = a_mantissa.shape
-    n = b_mantissa.shape[0]
-    out = np.zeros((m, n), dtype=np.float32)
-
-    for j in prange(n):
-        for i in range(m):
-            acc = 0.0
-            for blk in range(num_blocks):
-                dot = np.int32(0)
-                for k in range(block_size):
-                    dot += np.int32(a_mantissa[i, blk, k]) * np.int32(b_mantissa[j, blk, k])
-                acc += dot * a_scale[i, blk] * b_scale[j, blk]
-            # Bias folded into the store the kernel was already doing, so the
-            # caller never runs a separate elementwise op for it.
-            out[i, j] = acc * _INV_127_SQUARED + bias[j]
-
-    return out
+# The matmul itself is shared with the plain-int8 scheme — the two differ only
+# in how scales are chosen, not in how mantissas are multiplied. See
+# cachequant/kernel/blocked_matmul.py.
+_KERNEL = blocked_int8_matmul_kernel
 
 
 def prepare_bfp_operand(
@@ -73,6 +49,17 @@ def bfp_matmul_prequantized(
         raise ValueError("bfp_matmul_prequantized requires a 2D activation")
     if b_mantissa.ndim != 3:
         raise ValueError("b_mantissa must be 3D (n, num_blocks, block_size)")
+    # An int8-prepared operand is (n, 1, k), whose num_blocks * block_size also
+    # equals k — so the reduction-axis check below would pass it, and the
+    # kernel would then walk `blk` up to k/32 across an array holding one
+    # block. It is @njit and does not bounds-check, so that reads out of bounds
+    # silently instead of raising. Check the block width explicitly.
+    if b_mantissa.shape[2] != block_size:
+        raise ValueError(
+            f"b_mantissa block width {b_mantissa.shape[2]} does not match block_size "
+            f"{block_size} — operands prepared by prepare_int8_operand cannot be "
+            f"passed to the BFP entry point"
+        )
     if a.shape[1] != b_mantissa.shape[1] * b_mantissa.shape[2]:
         raise ValueError(
             f"reduction axis mismatch: a has {a.shape[1]}, "
@@ -89,7 +76,7 @@ def bfp_matmul_prequantized(
 
     a_mantissa, a_scale = prepare_bfp_operand(a, block_size)
 
-    return _bfp_matmul_kernel(a_mantissa, a_scale, b_mantissa, b_scale, bias)
+    return _KERNEL(a_mantissa, a_scale, b_mantissa, b_scale, bias)
 
 
 def bfp_matmul(a: np.ndarray, b: np.ndarray, block_size: int = DEFAULT_BLOCK_SIZE) -> np.ndarray:

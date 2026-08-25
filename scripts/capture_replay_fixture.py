@@ -11,6 +11,7 @@ from cachequant.bench.harness import compute_bench_result
 from cachequant.bench.provenance import provenance
 from cachequant.dashboard.app import _cost_per_1k, _prefill_tokens_per_sec
 from cachequant.kernel.bfp_linear import apply_bfp_quantization
+from cachequant.kernel.int8_linear import apply_int8_quantization
 from cachequant.kvcache.trie_cache import PrefixKVCache
 from cachequant.model import load_model
 from cachequant.pipeline import generate
@@ -60,23 +61,26 @@ def _generated_only(text: str, prompt: str, tokenizer) -> str:
 
 def main() -> None:
     # Pin both thread pools before any timed run. torch and numba have
-    # independent thread pools; without this BFP's numba matmul runs on every
-    # logical core while fp32's torch path stays at cpu_threads, making the
-    # captured BFP-vs-fp32 numbers not apples-to-apples. Same convention as
+    # independent thread pools; without this the quantized paths' numba matmul
+    # runs on every logical core while fp32's torch path stays at cpu_threads,
+    # making the captured quantized-vs-fp32 numbers not apples-to-apples. Same convention as
     # scripts/run_bfp_benchmark.py's main() and the dashboard's model loader.
     torch.set_num_threads(DEFAULT_CONFIG.cpu_threads)
     numba.set_num_threads(DEFAULT_CONFIG.cpu_threads)
 
     fp32_model, tokenizer = load_model()
     bfp_model = apply_bfp_quantization(copy.deepcopy(fp32_model))
-    generate(fp32_model, tokenizer, WARMUP_PROMPT, cache=None, max_new_tokens=WARMUP_MAX_NEW_TOKENS)
-    generate(bfp_model, tokenizer, WARMUP_PROMPT, cache=None, max_new_tokens=WARMUP_MAX_NEW_TOKENS)
+    int8_model = apply_int8_quantization(copy.deepcopy(fp32_model))
+    for model in (fp32_model, bfp_model, int8_model):
+        generate(model, tokenizer, WARMUP_PROMPT, cache=None, max_new_tokens=WARMUP_MAX_NEW_TOKENS)
 
     combos = [
         ("fp32_no_cache", fp32_model, False),
         ("fp32_cache", fp32_model, True),
         ("bfp_no_cache", bfp_model, False),
         ("bfp_cache", bfp_model, True),
+        ("int8_no_cache", int8_model, False),
+        ("int8_cache", int8_model, True),
     ]
 
     entries = []
