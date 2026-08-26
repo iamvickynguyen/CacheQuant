@@ -14,6 +14,7 @@ from cachequant.kernel.int8_linear import apply_int8_quantization
 from cachequant.kvcache.trie_cache import PrefixKVCache
 from cachequant.model import load_model
 from cachequant.pipeline import generate
+from cachequant.workloads import Conversation
 
 MAX_NEW_TOKENS = 50
 WARMUP_PROMPT = "The quick brown fox jumps over the lazy dog."
@@ -78,6 +79,14 @@ PROMPT_SETS = {
     "high_reuse": HIGH_REUSE_PROMPTS,
     "long_high_reuse": LONG_HIGH_REUSE_PROMPTS,
     "no_reuse": NO_REUSE_PROMPTS,
+}
+
+# Multi-turn chat workload: the prompt each turn is the whole transcript so far
+# plus one new user line, so the prefix the cache can reuse grows every turn.
+# See cachequant/workloads.py and the "Multi-turn chat" README section.
+CHAT_SYSTEMS = {
+    "short": "You are a helpful assistant. Answer in one short sentence.",
+    "long": LONG_PROMPT + " Answer questions about it in one short sentence.",
 }
 
 FIXTURE_PATH = Path(__file__).resolve().parent / "fixtures" / "replay.json"
@@ -156,6 +165,84 @@ def _timed_generate(model, tokenizer, prompt: str, cache):
     return text, timing, stats, wall_seconds
 
 
+def _continuation(text: str, prompt: str, tokenizer) -> str:
+    """Newly generated part of pipeline.generate's output — it returns prompt +
+    continuation decoded together. Same round-trip trick as _render_stream."""
+    decoded_prompt = tokenizer.decode(tokenizer.encode(prompt), skip_special_tokens=True)
+    return text[len(decoded_prompt):] if text.startswith(decoded_prompt) else text
+
+
+def _init_chat(system_key: str) -> None:
+    system = CHAT_SYSTEMS[system_key]
+    st.session_state.chat = {
+        "system_key": system_key,
+        "conv": Conversation(system),
+        "turns": [],  # {"user", "reply", "no_cache_prefill_s", "cache_prefill_s", "hit_rate"}
+        "cache": PrefixKVCache(max_tokens=DEFAULT_CONFIG.max_cache_tokens),
+    }
+
+
+def _render_multiturn(scheme: str) -> None:
+    with st.sidebar:
+        system_key = st.selectbox("Chat system prompt", list(CHAT_SYSTEMS), index=0)
+        send_clicked = st.button("Send turn", type="primary")
+        reset_chat_clicked = st.button("Reset chat")
+
+    if "chat" not in st.session_state or st.session_state.chat["system_key"] != system_key:
+        _init_chat(system_key)
+    if reset_chat_clicked:
+        _init_chat(system_key)
+        st.toast("Chat reset.")
+
+    user_msg = st.text_input("Next user message")
+
+    if send_clicked and user_msg.strip():
+        chat = st.session_state.chat
+        model = st.session_state.models[scheme]
+        tokenizer = st.session_state.tokenizer
+        prompt = chat["conv"].prompt_for(user_msg.strip())
+
+        # Same scheme both arms — this panel is the cache-vs-no-cache question,
+        # not the quantization question. Both timed end to end so the cache-on
+        # bar includes lookup()/insert() overhead (see _timed_generate).
+        no_cache_text, no_cache_timing, _, _ = _timed_generate(model, tokenizer, prompt, None)
+        _, cache_timing, cache_stats, cache_wall = _timed_generate(
+            model, tokenizer, prompt, chat["cache"]
+        )
+
+        cache_overhead = cache_wall - (cache_timing.prefill_seconds + cache_timing.decode_seconds)
+        chat["turns"].append(
+            {
+                "user": user_msg.strip(),
+                "reply": _continuation(no_cache_text, prompt, tokenizer).strip(),
+                "no_cache_prefill_s": no_cache_timing.prefill_seconds,
+                "cache_prefill_s": cache_timing.prefill_seconds + max(cache_overhead, 0.0),
+                "hit_rate": cache_stats.hit_rate if cache_stats else 0.0,
+            }
+        )
+        # Grow the transcript from the no-cache reply so both arms stay identical.
+        chat["conv"].commit(user_msg.strip(), chat["turns"][-1]["reply"])
+
+    turns = st.session_state.chat["turns"]
+    if not turns:
+        st.info("Type a message and hit Send turn. Each turn re-runs with and without the cache.")
+        return
+
+    st.subheader("Transcript")
+    for i, turn in enumerate(turns):
+        st.markdown(f"**Turn {i} — User:** {turn['user']}")
+        st.markdown(f"**Assistant:** {turn['reply']}")
+
+    st.subheader("Prefill seconds per turn")
+    st.bar_chart(
+        {
+            "no cache (re-reads whole transcript)": [t["no_cache_prefill_s"] for t in turns],
+            "cache-on (honest, incl. overhead)": [t["cache_prefill_s"] for t in turns],
+        }
+    )
+    st.caption("Hit rate by turn: " + ", ".join(f"{t['hit_rate']:.0%}" for t in turns))
+
+
 def _init_session_state(replay_mode: bool) -> None:
     if "results_rows" not in st.session_state:
         st.session_state.results_rows = []
@@ -224,8 +311,18 @@ def main() -> None:
         st.sidebar.caption("Offline replay: pre-captured runs, no live model — safe if the live demo breaks.")
 
     with st.sidebar:
+        workload = st.radio("Workload", ["one-shot", "multi-turn chat"], index=0)
         scheme_label = st.radio("Quantization", ["fp32", "BFP", "int8"], index=0)
         scheme = {"fp32": "fp32", "BFP": "bfp", "int8": "int8"}[scheme_label]
+
+    if workload == "multi-turn chat":
+        if replay_mode:
+            st.info("Multi-turn chat needs the live model — turn off Replay (offline).")
+            return
+        _render_multiturn(scheme)
+        return
+
+    with st.sidebar:
         use_cache = st.toggle("Prefix cache", value=False)
         prompt_set_name = st.radio("Prompt set", list(PROMPT_SETS.keys()), index=0)
         generate_clicked = st.button("Generate", type="primary")

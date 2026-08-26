@@ -2,7 +2,7 @@
 
 Custom int8 quantized kernels (two schemes: BFP8 and plain int8) + KV-cache prefix reuse for faster, cheaper LLM inference. Benchmarked and visualized live.
 
-## What's built so far (Phase 1 + 2 + 3 + 4a + 4b + 5 + 6)
+## What's built so far (Phase 1 + 2 + 3 + 4a + 4b + 5 + 6 + 7)
 
 A clean GPT-2 small (124M) generation loop on CPU, with prefill and decode timed separately, and a benchmark harness that turns those timings into tokens/sec, latency, and cost per 1K generated tokens. This is the frozen baseline every later optimization (quantized kernel, KV-cache reuse) gets compared against. Phase 1 has no quantization or caching — every call ran full fp32 GPT-2 from scratch.
 
@@ -416,6 +416,78 @@ hit-rate/speedup numbers and the documented break points (prefix caching only
 helps prefill, never decode; the final prompt token is always freshly
 computed, capping max hit rate at `(N-1)/N` for an N-token prompt).
 
+The three prompt sets here are all **one-shot**: independent prompts sharing a
+fixed ~12-token preamble. That is too little reuse for the cache to win — see
+the math below and the multi-turn workload that fixes it.
+
+### Multi-turn chat
+
+```bash
+pytest tests/test_workloads.py -v                       # transcript builder, no network
+pytest tests/test_multiturn_benchmark.py -v -m integration   # reuse-grows + output-matches, real GPT-2
+python scripts/run_multiturn_benchmark.py   # prefill cost per turn, writes benchmarks/multiturn_results.json
+```
+
+A one-shot request sends an independent prompt. A **multi-turn** request sends
+the whole transcript so far — system prompt, every prior user line, and the
+model's own prior replies — plus one new user line
+(`cachequant/workloads.py`). The transcript grows every turn, so the prefix the
+cache can reuse grows with it.
+
+**Why one-shot can't show the cache working.** Let $p$ = prompt tokens, $h$ =
+hit rate, $w$ = marginal per-token prefill cost, $O$ = fixed cache
+lookup + insert cost. The cache is a net win only when the prefill it skips
+beats its own overhead:
+
+$$h \cdot p \cdot w \;>\; O$$
+
+On the short one-shot sets $p \approx 24$, $h \approx 0.7$, and with
+$w \approx 0.75\ \text{ms}$ the saving $h p w \approx 13\ \text{ms}$ barely
+clears $O \approx 5\ \text{ms}$ — inside the run-to-run noise, so
+`honest_prefill_speedup` sits at 0.96–1.0.
+
+**Why multi-turn does.** Turn $k$ adds $\approx L$ tokens (user line + reply),
+so $p_k \approx kL$, reused $c_k \approx (k-1)L$, and
+
+$$h_k \;\approx\; \frac{k-1}{k} \;\longrightarrow\; 1$$
+
+Taking prefill cost per token $\approx b \cdot (\text{tokens attended})$, the
+total prefill work over $K$ turns is
+
+$$T_{\text{no cache}} \;\approx\; \sum_{k=1}^{K} b\,(kL)^2 \;\approx\; \frac{b\,L^2 K^3}{3}
+\qquad
+T_{\text{cache}} \;\approx\; \sum_{k=1}^{K} b\,L\,(kL) \;\approx\; \frac{b\,L^2 K^2}{2}$$
+
+so the cache turns $O(K^3)$ prefill work into $O(K^2)$. The benchmark draws
+exactly this: a no-cache prefill-per-turn line that curves upward, a cache-on
+line that stays roughly flat, the gap widening with turn number
+(`benchmarks/charts/multiturn_prefill_by_turn.png`).
+
+Latest recorded numbers (median of 5 reps; `honest_prefill_speedup` =
+no-cache prefill / cache-on prefill with `lookup()` + `insert()` overhead
+included; 8-turn conversations, `MAX_NEW_TOKENS = 12`):
+
+| turn | prompt tok | no-cache prefill | cache-on honest | hit rate | speedup |
+|---:|---:|---:|---:|---:|---:|
+| 0 (cold) | 25 | 38 ms | 44 ms | 0.00 | 0.86x |
+| 1 | 49 | 55 ms | 45 ms | 0.53 | 1.22x |
+| 3 | 103 | 100 ms | 50 ms | 0.75 | 2.02x |
+| 5 | 153 | 120 ms | 53 ms | 0.84 | 2.30x |
+| 7 | 208 | 162 ms | 54 ms | 0.87 | 2.96x |
+
+(short system prompt; `france` conversation shown, `python` matches within a few
+percent). With the ~280-token `LONG_PROMPT` as the system prompt the reused
+prefix dominates from turn 1, so hit rate jumps to ~0.92 immediately and the
+speedup runs **4.3x at turn 1 to 5.8x at turn 7**.
+
+Turn 0 loses (0.86x) — cold cache, zero reuse, pays the `insert()` cost for
+nothing. That is the one-shot regime. Every turn after it wins, and the win
+grows because no-cache prefill keeps climbing (38 ms → 162 ms) while cache-on
+stays flat (~50 ms): the cache always re-reads just the newest turn.
+
+The one-shot sets stay — this workload runs alongside them, not instead. See
+`docs/superpowers/specs/2026-08-26-phase7-multiturn-chat.md`.
+
 ### Combined pipeline
 
 ```bash
@@ -496,6 +568,13 @@ decode throughput are shown as separate metrics rather than as one aggregate
 number, since that split is what makes Phase 2's BFP break point (hurts
 compute-bound prefill far more than it hurts memory-bandwidth-bound
 matrix-vector decode) visible during a live demo instead of averaged away.
+
+A **Workload** toggle switches the one-shot flow above for **multi-turn chat**:
+type a message, hit Send turn, and each turn re-runs the growing transcript
+with and without the cache on the selected scheme. A bar chart of prefill
+seconds per turn makes the no-cache line climb while the cache-on bar stays
+flat — the Phase 7 result, live. "Reset chat" clears the transcript and the
+chat's cache.
 
 This is demo software for a live presentation, not a tested/production
 surface — see `docs/superpowers/specs/2026-08-14-phase4b-dashboard-design.md`
@@ -593,7 +672,7 @@ Runs pathological inputs across all six toggle combos and writes
 `benchmarks/stress_test_results.json`. Findings are documented, not fixed
 — see Break points below.
 
-## Limitations (Phase 1 + 2 + 3 + 4a + 4b + 5 + 6)
+## Limitations (Phase 1 + 2 + 3 + 4a + 4b + 5 + 6 + 7)
 
 - CPU only, batch size 1 (enforced by an assertion in `generate_with_timing`) — no GPU path, no batching.
 - The BFP kernel is inference-only (no autograd/backward pass) and requires the
