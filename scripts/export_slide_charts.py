@@ -1,9 +1,9 @@
 """Re-run every benchmark fresh, then export slide-ready charts and tables.
 
 Takes several minutes: it runs the baseline, both quantized benchmarks, the
-quality comparison, the KV-cache sweep and the combined toggle sweep before
-plotting anything, so the charts can never be a mix of runs from different
-sessions on a differently-loaded machine.
+quality comparison, the KV-cache sweep, the combined toggle sweep and the
+multi-turn chat sweep before plotting anything, so the charts can never be a
+mix of runs from different sessions on a differently-loaded machine.
 """
 
 import json
@@ -50,6 +50,7 @@ BENCHMARK_SCRIPTS = [
     "compare_quantization_quality.py",
     "run_kvcache_benchmark.py",
     "run_combined_benchmark.py",
+    "run_multiturn_benchmark.py",
 ]
 
 
@@ -430,10 +431,48 @@ def _chart_combined() -> None:
     _save(fig, "combined_comparison.png")
 
 
+def _chart_multiturn() -> None:
+    """Multi-turn chat: prefill cost per turn, no-cache vs cache-on.
+
+    The Phase 7 slide. A one-shot request re-reads nothing; a chat turn re-reads
+    the whole transcript, which grows every turn — so the no-cache line curves
+    up while the cache-on line, which only ever re-reads the newest turn, stays
+    flat. `by_turn_index` is the median across the three benchmark conversations.
+    """
+    aggregate = _load("multiturn_results.json")["by_turn_index"]
+    turns = [r["turn_index"] for r in aggregate]
+    no_cache = [r["baseline_prefill_seconds"] for r in aggregate]
+    cache_on = [r["honest_prefill_seconds"] for r in aggregate]
+
+    fig, ax = _figure(figsize=(7.5, 4.6))
+    ax.plot(turns, no_cache, "o-", color=INK_MUTED, linewidth=2,
+            label="no cache (re-reads whole transcript)")
+    ax.plot(turns, cache_on, "o-", color=SCHEME_COLOR["fp32"], linewidth=2,
+            label="cache-on (honest, incl. lookup/insert)")
+    for x, y in zip(turns, no_cache):
+        ax.annotate(f"{y * 1000:.0f}", (x, y), textcoords="offset points",
+                    xytext=(0, 6), ha="center", fontsize=8, color=INK)
+    for x, y in zip(turns, cache_on):
+        ax.annotate(f"{y * 1000:.0f}", (x, y), textcoords="offset points",
+                    xytext=(0, -12), ha="center", fontsize=8, color=INK)
+    ax.set_xlabel("conversation turn", color=INK_MUTED, fontsize=9)
+    ax.set_xticks(turns)
+    ax.set_ylim(0, max(no_cache) * 1.2)
+    _style(ax, "", "prefill seconds (median across conversations)")
+    ax.legend(frameon=False, fontsize=8, labelcolor=INK_MUTED)
+    fig.suptitle(
+        "Multi-turn chat: no-cache prefill grows with the transcript, cache-on stays flat",
+        color=INK,
+        fontsize=12,
+    )
+    _save(fig, "multiturn_prefill_growth.png")
+
+
 def _write_summary_md() -> None:
     quality = _load("quantization_quality.json")
     kvcache = _load("kvcache_results.json")
     combined = _load("combined_results.json")
+    multiturn = _load("multiturn_results.json")
     by_key = {row["key"]: row for row in quality["schemes"]}
 
     lines = [
@@ -500,6 +539,18 @@ def _write_summary_md() -> None:
         row = [f"{entries[c]['total_honest_prefill_seconds']:.3f}" for c in combos]
         lines.append(f"| {ps} | " + " | ".join(row) + " |")
 
+    lines += ["", "## Multi-turn chat: prefill seconds per turn "
+              f"(median across {len(multiturn['conversations'])} conversations)", "",
+              "| turn | no-cache prefill (ms) | cache-on honest (ms) | hit rate | speedup |",
+              "|---:|---:|---:|---:|---:|"]
+    for row in multiturn["by_turn_index"]:
+        speedup = row["baseline_prefill_seconds"] / row["honest_prefill_seconds"]
+        lines.append(
+            f"| {row['turn_index']} | {row['baseline_prefill_seconds'] * 1000:.0f} "
+            f"| {row['honest_prefill_seconds'] * 1000:.0f} | {row['hit_rate']:.2f} "
+            f"| {speedup:.2f}x |"
+        )
+
     (CHARTS_DIR / "summary.md").write_text("\n".join(lines) + "\n")
 
 
@@ -514,6 +565,7 @@ def main(run_benchmarks: bool = True) -> None:
     _chart_kernel_scheme_comparison()
     _chart_cache_hit_rate_vs_speedup()
     _chart_combined()
+    _chart_multiturn()
     _write_summary_md()
     print(f"wrote charts + summary.md to {CHARTS_DIR}")
 

@@ -463,24 +463,29 @@ exactly this: a no-cache prefill-per-turn line that curves upward, a cache-on
 line that stays roughly flat, the gap widening with turn number
 (`benchmarks/charts/multiturn_prefill_by_turn.png`).
 
-Latest recorded numbers (median of 5 reps; `honest_prefill_speedup` =
-no-cache prefill / cache-on prefill with `lookup()` + `insert()` overhead
-included; 8-turn conversations, `MAX_NEW_TOKENS = 12`):
+Latest recorded numbers — median of 5 reps, then the median across the 3
+conversations (`by_turn_index` in the JSON); `speedup` = no-cache prefill /
+cache-on prefill with `lookup()` + `insert()` overhead included; 8-turn
+conversations, `MAX_NEW_TOKENS = 12`:
 
-| turn | prompt tok | no-cache prefill | cache-on honest | hit rate | speedup |
-|---:|---:|---:|---:|---:|---:|
-| 0 (cold) | 25 | 38 ms | 44 ms | 0.00 | 0.86x |
-| 1 | 49 | 55 ms | 45 ms | 0.53 | 1.22x |
-| 3 | 103 | 100 ms | 50 ms | 0.75 | 2.02x |
-| 5 | 153 | 120 ms | 53 ms | 0.84 | 2.30x |
-| 7 | 208 | 162 ms | 54 ms | 0.87 | 2.96x |
+| turn | no-cache prefill | cache-on honest | hit rate | speedup |
+|---:|---:|---:|---:|---:|
+| 0 (cold) | 38 ms | 44 ms | 0.00 | 0.87x |
+| 1 | 55 ms | 45 ms | 0.53 | 1.22x |
+| 2 | 72 ms | 51 ms | 0.66 | 1.42x |
+| 3 | 100 ms | 50 ms | 0.75 | 2.02x |
+| 4 | 117 ms | 51 ms | 0.80 | 2.29x |
+| 5 | 120 ms | 53 ms | 0.84 | 2.28x |
+| 6 | 142 ms | 55 ms | 0.85 | 2.56x |
+| 7 | 162 ms | 54 ms | 0.87 | 3.01x |
 
-(short system prompt; `france` conversation shown, `python` matches within a few
-percent). With the ~280-token `LONG_PROMPT` as the system prompt the reused
-prefix dominates from turn 1, so hit rate jumps to ~0.92 immediately and the
-speedup runs **4.3x at turn 1 to 5.8x at turn 7**.
+Two of the three conversations use a short system prompt and one uses the
+~280-token `LONG_PROMPT`; the median tracks the short pair. On the
+`LONG_PROMPT` conversation alone the reused prefix dominates from turn 1, so
+hit rate jumps to ~0.92 immediately and the speedup runs **4.3x at turn 1 to
+5.8x at turn 7** — the same shape, steeper.
 
-Turn 0 loses (0.86x) — cold cache, zero reuse, pays the `insert()` cost for
+Turn 0 loses (0.87x) — cold cache, zero reuse, pays the `insert()` cost for
 nothing. That is the one-shot regime. Every turn after it wins, and the win
 grows because no-cache prefill keeps climbing (38 ms → 162 ms) while cache-on
 stays flat (~50 ms): the cache always re-reads just the newest turn.
@@ -604,11 +609,11 @@ python scripts/export_slide_charts.py --charts-only   # re-plot from existing be
 
 The default re-runs `run_baseline.py`, `run_bfp_benchmark.py`,
 `run_int8_benchmark.py`, `run_fp16_benchmark.py`,
-`compare_quantization_quality.py`, `run_kvcache_benchmark.py` and
-`run_combined_benchmark.py` fresh (takes several minutes), then writes
-`benchmarks/charts/*.png` and `benchmarks/charts/summary.md`. Each benchmark
-runs in its own subprocess, so a later one never measures a machine an earlier
-one filled.
+`compare_quantization_quality.py`, `run_kvcache_benchmark.py`,
+`run_combined_benchmark.py` and `run_multiturn_benchmark.py` fresh (takes
+several minutes), then writes `benchmarks/charts/*.png` and
+`benchmarks/charts/summary.md`. Each benchmark runs in its own subprocess, so a
+later one never measures a machine an earlier one filled.
 
 Charts written:
 
@@ -620,6 +625,7 @@ Charts written:
 | `kernel_scheme_comparison.png` | per-layer kernel time, BFP8 vs int8, on the shared njit kernel |
 | `cache_hit_rate_vs_speedup.png` | KV-cache hit rate vs honest prefill speedup |
 | `combined_comparison.png` | 3 schemes x cache on/off x 3 prompt sets |
+| `multiturn_prefill_growth.png` | multi-turn chat: no-cache prefill grows per turn, cache-on stays flat |
 
 `summary.md` is the table view for all of them — several palette slots fall
 below 3:1 contrast on a white surface, so every chart also carries direct
@@ -717,6 +723,13 @@ Runs pathological inputs across all six toggle combos and writes
   alone exceeds it, the cache temporarily holds more than the configured cap
   rather than raising or truncating (eviction only reclaims *existing*
   entries, and stops once there's nothing left to evict).
+- The multi-turn chat benchmark never exercises eviction: its longest
+  transcript is 489 tokens against the 2048-token `max_cache_tokens` cap, so
+  every turn's prefix stays fully resident. Eviction *correctness* is covered
+  by `tests/test_kvcache_generate.py`; what is untested is a conversation long
+  enough that early turns get evicted and later turns re-request an evicted
+  middle — the benchmark would need much longer transcripts or a smaller cap
+  to reach that.
 - Enabling the cache costs ~9% on a workload with no prefix reuse (measured
   0.908x on the no-reuse prompt set): every request still pays the failed
   lookup, the K/V copy, and an insert nothing later reads. The cache is a bet

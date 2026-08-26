@@ -45,3 +45,16 @@ readable without relying on colour.
 | high_reuse | 0.175 | 0.181 | 0.973 | 0.474 | 0.597 | 0.343 |
 | long_high_reuse | 1.051 | 0.442 | 7.361 | 1.871 | 5.269 | 1.368 |
 | no_reuse | 0.163 | 0.181 | 0.372 | 0.399 | 0.274 | 0.251 |
+
+## Multi-turn chat: prefill seconds per turn (median across 3 conversations)
+
+| turn | no-cache prefill (ms) | cache-on honest (ms) | hit rate | speedup |
+|---:|---:|---:|---:|---:|
+| 0 | 38 | 44 | 0.00 | 0.87x |
+| 1 | 55 | 45 | 0.53 | 1.22x |
+| 2 | 72 | 51 | 0.66 | 1.42x |
+| 3 | 100 | 50 | 0.75 | 2.02x |
+| 4 | 117 | 51 | 0.80 | 2.29x |
+| 5 | 120 | 53 | 0.84 | 2.28x |
+| 6 | 142 | 55 | 0.85 | 2.56x |
+| 7 | 162 | 54 | 0.87 | 3.01x |
