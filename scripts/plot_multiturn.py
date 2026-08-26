@@ -30,16 +30,6 @@ def _chart_prefill_by_turn(data: dict) -> None:
     cache_on = [r["honest_prefill_seconds"] for r in aggregate]
 
     fig, ax = plt.subplots(figsize=(7, 5))
-
-    # Faint per-conversation lines behind the aggregate.
-    for conv in data["conversations"].values():
-        rows = conv["rows"]
-        xs = [r["turn_index"] for r in rows]
-        ax.plot(xs, [r["baseline_prefill_seconds"] for r in rows],
-                color="tab:red", alpha=0.15, linewidth=1)
-        ax.plot(xs, [r["honest_prefill_seconds"] for r in rows],
-                color="tab:blue", alpha=0.15, linewidth=1)
-
     ax.plot(turns, no_cache, "o-", color="tab:red", label="no cache (re-reads whole transcript)")
     ax.plot(turns, cache_on, "o-", color="tab:blue", label="cache-on (honest, incl. lookup/insert)")
     ax.set_xlabel("conversation turn")
