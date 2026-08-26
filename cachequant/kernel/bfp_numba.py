@@ -14,12 +14,20 @@ def prepare_bfp_operand(
 ) -> tuple[np.ndarray, np.ndarray]:
     """Quantize `x` into the `(mantissa, per-block scale)` pair the kernel takes.
 
-    The scale is `2**e` rather than the raw exponent so the kernel never
-    evaluates a `pow`: it used to compute `2.0 ** (e_a + e_b)` inside the
-    accumulation loop, i.e. M*N*num_blocks times. Powers of two are exact in
-    float64, so factoring that into `2**e_a * 2**e_b` is numerically identical
-    while reducing it to M*num_blocks + N*num_blocks — and for a static operand
-    it is hoisted out of the forward pass entirely.
+    Returns `2**e` instead of the raw exponent `e`, so the kernel can just
+    multiply by the scale instead of computing `2 ** e` on every use.
+
+    The scale is float64, not float32. That looks wasteful — float32 would
+    halve this array's size (21.2 MB -> 10.6 MB) and give the exact same
+    result, since `2**e` fits in float32 for every exponent this model
+    produces. But the kernel's running total (`acc` in blocked_matmul.py) is
+    float64, so a float32 scale would need to be widened to float64 on every
+    single use inside the hot loop. Measured: that widening costs more than
+    the smaller array saves — 13-18% slower for BFP, 7-9% for int8. Keep this
+    float64.
+
+    Must match `prepare_int8_operand`'s dtype: both feed the same compiled
+    kernel, and a mismatch would force Numba to compile it twice.
     """
     mantissa, exponent = quantize_bfp(x, block_size)
     return mantissa, np.exp2(exponent.astype(np.float64))

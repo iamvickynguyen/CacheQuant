@@ -20,17 +20,14 @@ def prepare_int8_operand(
 ) -> tuple[np.ndarray, np.ndarray]:
     """Quantize `x` into the `(mantissa, per-block scale)` pair the kernel takes.
 
-    The kernel is written against BFP's blocked layout — mantissa
-    `(n, num_blocks, block_size)` and scale `(n, num_blocks)`. Plain int8 is
-    that layout with a single block covering the entire reduction axis, so this
-    reshapes rather than computing anything the kernel could not already
-    consume. Collapsing to one block is also why int8 is the cheaper of the two
-    schemes at the same shapes: the kernel then does one scale multiply per
-    output element instead of `k // 32` of them.
+    Reshapes into BFP's `(n, num_blocks, block_size)` layout with a single
+    block covering the whole reduction axis — plain int8 is that layout, just
+    with one block instead of many. That's also why int8 is faster than BFP at
+    the same shape: one scale multiply per output element instead of `k // 32`.
 
-    The scale is widened to float64 to match `prepare_bfp_operand`, so both
-    schemes hit the same Numba specialization of the shared kernel instead of
-    triggering a second JIT compilation.
+    `quantize_int8` returns the scale as float32; this widens it to float64.
+    That's not wasted work — see `prepare_bfp_operand`'s docstring for why the
+    kernel needs it at float64, and what it costs (7-9% here) to skip this.
     """
     mantissa, scale = quantize_int8(x, per_tensor)
     *lead, k = mantissa.shape

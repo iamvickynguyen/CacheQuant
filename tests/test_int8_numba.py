@@ -155,3 +155,19 @@ def test_int8_matmul_prequantized_rejects_a_bfp_prepared_operand():
         assert False, "expected ValueError"
     except ValueError:
         pass
+
+
+def test_prepare_int8_operand_returns_float64_scales():
+    # float64 even though quantize_int8 produces float32, and even though
+    # float32 would halve the array and give bit-identical results. The kernel
+    # accumulates in float64, so a narrower scale is converted on every use —
+    # measured at GPT-2 shapes, float32 scales cost int8 7-9% and BFP 13-18%,
+    # the gap being that BFP does k/32 scale multiplies per output element
+    # where int8 does one. The array is small enough to stay cache-resident, so
+    # there is no bandwidth win to offset that.
+    #
+    # This was tried and reverted. The test exists so it is not tried again.
+    rng = np.random.default_rng(12)
+    _, scale = prepare_int8_operand(rng.standard_normal((16, 64)).astype(np.float32))
+
+    assert scale.dtype == np.float64

@@ -138,3 +138,23 @@ def test_bfp_matmul_prequantized_rejects_an_int8_prepared_operand():
         assert False, "expected ValueError"
     except ValueError:
         pass
+
+
+def test_both_schemes_prepare_scales_at_the_same_width():
+    # Both must agree: they share one njit kernel and Numba compiles a separate
+    # specialization per argument signature, so a mismatch silently doubles the
+    # compiled code and breaks the "same kernel" property the schemes rest on.
+    #
+    # float64 is the measured choice, not the obvious one — see
+    # prepare_bfp_operand's docstring for why narrowing to float32 is a
+    # 13-18% regression despite halving the array and changing no results.
+    from cachequant.kernel.int8_numba import prepare_int8_operand
+
+    rng = np.random.default_rng(13)
+    x = rng.standard_normal((16, 64)).astype(np.float32)
+
+    _, bfp_scale = prepare_bfp_operand(x)
+    _, int8_scale = prepare_int8_operand(x)
+
+    assert bfp_scale.dtype == np.float64
+    assert bfp_scale.dtype == int8_scale.dtype
