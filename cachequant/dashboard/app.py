@@ -178,7 +178,11 @@ def _init_chat(system_key: str) -> None:
         "system_key": system_key,
         "conv": Conversation(system),
         "turns": [],  # {"user", "reply", "no_cache_prefill_s", "cache_prefill_s", "hit_rate"}
-        "cache": PrefixKVCache(max_tokens=DEFAULT_CONFIG.max_cache_tokens),
+        # One cache per scheme, never shared: a given token sequence produces
+        # different K/V under fp32 / BFP / int8, so one cache cannot serve two.
+        # Same rule as the one-shot path's st.session_state.caches.
+        "caches": {name: PrefixKVCache(max_tokens=DEFAULT_CONFIG.max_cache_tokens)
+                   for name in st.session_state.models},
     }
 
 
@@ -207,7 +211,7 @@ def _render_multiturn(scheme: str) -> None:
         # bar includes lookup()/insert() overhead (see _timed_generate).
         no_cache_text, no_cache_timing, _, _ = _timed_generate(model, tokenizer, prompt, None)
         _, cache_timing, cache_stats, cache_wall = _timed_generate(
-            model, tokenizer, prompt, chat["cache"]
+            model, tokenizer, prompt, chat["caches"][scheme]
         )
 
         cache_overhead = cache_wall - (cache_timing.prefill_seconds + cache_timing.decode_seconds)
